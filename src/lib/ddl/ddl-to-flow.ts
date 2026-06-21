@@ -1,8 +1,13 @@
 import type { Edge } from "@xyflow/react";
 import type { ParsedForeignKey, ParsedSchema } from "@/lib/ddl/ast-walker";
+import {
+  DEFAULT_EDGE_COLOR,
+  DEFAULT_EDGE_STYLE,
+} from "@/lib/ddl/edge-styles";
+import { mergeDiagramSettings } from "@/lib/diagram-settings";
 import { layoutTableNodes } from "@/lib/ddl/layout-graph";
 import { handleId, optimizeEdgeHandles } from "@/lib/ddl/optimize-edge-handles";
-import type { DiagramSettings, TableFlowNode, TableNodeData } from "@/lib/types/diagram";
+import type { DiagramSettings, FkEdgeData, TableFlowNode, TableNodeData } from "@/lib/types/diagram";
 
 export type FlowGraph = {
   nodes: TableFlowNode[];
@@ -21,25 +26,36 @@ function buildNodeData(table: ParsedSchema["tables"][number]): TableNodeData {
 }
 
 function buildEdges(foreignKeys: ParsedForeignKey[]): Edge[] {
-  return foreignKeys.map((fk) => ({
-    id: fk.id,
-    source: tableNodeId(fk.fromTable),
-    target: tableNodeId(fk.toTable),
-    sourceHandle: handleId(fk.fromColumn, "source", "right"),
-    targetHandle: handleId(fk.toColumn, "target", "left"),
-    type: "smoothstep",
-    animated: false,
-    style: { stroke: "#71717a", strokeWidth: 1.5 },
-    pathOptions: { borderRadius: 12 },
-    markerEnd: { type: "arrowclosed" as const, color: "#71717a" },
-  }));
+  return foreignKeys.map((fk) => {
+    const data: FkEdgeData = {
+      fromTable: fk.fromTable,
+      fromColumn: fk.fromColumn,
+      toTable: fk.toTable,
+      toColumn: fk.toColumn,
+      label: `${fk.fromTable}.${fk.fromColumn} → ${fk.toTable}.${fk.toColumn}`,
+    };
+
+    return {
+      id: fk.id,
+      source: tableNodeId(fk.fromTable),
+      target: tableNodeId(fk.toTable),
+      sourceHandle: handleId(fk.fromColumn, "source", "right"),
+      targetHandle: handleId(fk.toColumn, "target", "left"),
+      type: "smoothstep",
+      animated: false,
+      data,
+      style: { ...DEFAULT_EDGE_STYLE },
+      pathOptions: { borderRadius: 8 },
+      markerEnd: { type: "arrowclosed" as const, color: DEFAULT_EDGE_COLOR },
+    };
+  });
 }
 
-export function ddlSchemaToFlow(
+export async function ddlSchemaToFlow(
   schema: ParsedSchema,
   existingNodes: TableFlowNode[] = [],
   settings?: DiagramSettings,
-): FlowGraph {
+): Promise<FlowGraph> {
   const preservedPositions = new Map<string, { x: number; y: number }>();
   for (const node of existingNodes) {
     preservedPositions.set(node.id, node.position);
@@ -56,10 +72,11 @@ export function ddlSchemaToFlow(
   });
 
   const edges = buildEdges(schema.foreignKeys);
-  const nodes = layoutTableNodes(draftNodes, edges, preservedPositions, settings);
+  const resolvedSettings = mergeDiagramSettings(settings);
+  const nodes = await layoutTableNodes(draftNodes, edges, preservedPositions, resolvedSettings);
 
   return {
     nodes,
-    edges: optimizeEdgeHandles(nodes, edges),
+    edges: optimizeEdgeHandles(nodes, edges, resolvedSettings.columnView),
   };
 }

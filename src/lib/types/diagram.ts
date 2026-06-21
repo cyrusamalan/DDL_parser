@@ -18,11 +18,45 @@ export type DiagramEdge = Edge;
 export type DiagramLayoutDirection = "vertical" | "landscape";
 export type DiagramSpacing = "compact" | "normal" | "roomy";
 export type DiagramGridSize = 3 | 4 | 5 | 6;
+export type DiagramLayoutEngine = "elk" | "grid";
+export type DiagramColumnView = "full" | "keysOnly";
+
+export type FkEdgeData = {
+  fromTable: string;
+  fromColumn: string;
+  toTable: string;
+  toColumn: string;
+  label: string;
+};
+
+export type TableGroupColor =
+  | "indigo"
+  | "emerald"
+  | "violet"
+  | "amber"
+  | "rose"
+  | "cyan"
+  | "orange"
+  | "teal";
+
+export type TableGroup = {
+  id: string;
+  name: string;
+  color: TableGroupColor;
+};
+
+export type DiagramGrouping = {
+  groups: TableGroup[];
+  assignments: Record<string, string>;
+};
 
 export type DiagramSettings = {
   layoutDirection: DiagramLayoutDirection;
+  layoutEngine: DiagramLayoutEngine;
   gridSize: DiagramGridSize;
   spacing: DiagramSpacing;
+  columnView: DiagramColumnView;
+  hideIsolatedTables: boolean;
   showMinimap: boolean;
   autoFitOnLayout: boolean;
 };
@@ -33,6 +67,7 @@ export type CanvasState = {
   viewport?: Viewport;
   sql?: string;
   diagramSettings?: DiagramSettings;
+  grouping?: DiagramGrouping;
 };
 
 export type DiagramSummary = {

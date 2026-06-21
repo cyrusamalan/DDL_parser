@@ -1,5 +1,6 @@
 import type { Edge } from "@xyflow/react";
 import { mergeDiagramSettings, spacingMultiplier } from "@/lib/diagram-settings";
+import { elkLayoutTableNodes } from "@/lib/ddl/elk-layout";
 import { optimizeEdgeHandles } from "@/lib/ddl/optimize-edge-handles";
 import { TABLE_WIDTH, estimateTableNodeHeight } from "./node-metrics";
 import type { DiagramSettings, TableFlowNode } from "@/lib/types/diagram";
@@ -89,6 +90,7 @@ function layoutGridVertical(
   startY: number,
   gridSize: number,
   gaps: LayoutGaps,
+  columnView: DiagramSettings["columnView"],
 ): { positions: Map<string, { x: number; y: number }>; width: number; height: number } {
   const positions = new Map<string, { x: number; y: number }>();
   if (nodeIds.length === 0) {
@@ -105,7 +107,7 @@ function layoutGridVertical(
     const node = nodeById.get(id);
     if (!node) continue;
 
-    const height = estimateTableNodeHeight(node);
+    const height = estimateTableNodeHeight(node, columnView);
     positions.set(id, { x, y });
     rowHeight = Math.max(rowHeight, height);
     maxWidth = Math.max(maxWidth, x + TABLE_WIDTH - startX);
@@ -139,6 +141,7 @@ function layoutGridLandscape(
   startY: number,
   gridSize: number,
   gaps: LayoutGaps,
+  columnView: DiagramSettings["columnView"],
 ): { positions: Map<string, { x: number; y: number }>; width: number; height: number } {
   const positions = new Map<string, { x: number; y: number }>();
   if (nodeIds.length === 0) {
@@ -155,7 +158,7 @@ function layoutGridLandscape(
     const node = nodeById.get(id);
     if (!node) continue;
 
-    const height = estimateTableNodeHeight(node);
+    const height = estimateTableNodeHeight(node, columnView);
     positions.set(id, { x, y });
     colWidth = Math.max(colWidth, TABLE_WIDTH);
     maxHeight = Math.max(maxHeight, y + height - startY);
@@ -189,9 +192,9 @@ function layoutLevelGrid(
   gaps: LayoutGaps,
 ): { positions: Map<string, { x: number; y: number }>; width: number; height: number } {
   if (settings.layoutDirection === "landscape") {
-    return layoutGridLandscape(nodeIds, nodeById, startX, startY, settings.gridSize, gaps);
+    return layoutGridLandscape(nodeIds, nodeById, startX, startY, settings.gridSize, gaps, settings.columnView);
   }
-  return layoutGridVertical(nodeIds, nodeById, startX, startY, settings.gridSize, gaps);
+  return layoutGridVertical(nodeIds, nodeById, startX, startY, settings.gridSize, gaps, settings.columnView);
 }
 
 function computeLayout(
@@ -248,7 +251,10 @@ function computeLayout(
   return positions;
 }
 
-export function layoutBounds(nodes: TableFlowNode[]): {
+export function layoutBounds(
+  nodes: TableFlowNode[],
+  columnView: DiagramSettings["columnView"] = "full",
+): {
   minX: number;
   minY: number;
   maxX: number;
@@ -269,7 +275,7 @@ export function layoutBounds(nodes: TableFlowNode[]): {
     minX = Math.min(minX, node.position.x);
     minY = Math.min(minY, node.position.y);
     maxX = Math.max(maxX, node.position.x + TABLE_WIDTH);
-    maxY = Math.max(maxY, node.position.y + estimateTableNodeHeight(node));
+    maxY = Math.max(maxY, node.position.y + estimateTableNodeHeight(node, columnView));
   }
 
   return {
@@ -282,7 +288,7 @@ export function layoutBounds(nodes: TableFlowNode[]): {
   };
 }
 
-export function layoutTableNodes(
+export function layoutTableNodesSync(
   nodes: TableFlowNode[],
   edges: Edge[],
   preservedPositions: Map<string, { x: number; y: number }> = new Map(),
@@ -299,14 +305,46 @@ export function layoutTableNodes(
   }));
 }
 
-export function relayoutNodes(
+export async function layoutTableNodes(
+  nodes: TableFlowNode[],
+  edges: Edge[],
+  preservedPositions: Map<string, { x: number; y: number }> = new Map(),
+  settings?: DiagramSettings,
+): Promise<TableFlowNode[]> {
+  if (nodes.length === 0) return nodes;
+
+  const resolvedSettings = mergeDiagramSettings(settings);
+
+  let autoPositions: Map<string, { x: number; y: number }>;
+
+  if (resolvedSettings.layoutEngine === "elk") {
+    try {
+      autoPositions = await elkLayoutTableNodes(nodes, edges, resolvedSettings);
+      if (autoPositions.size === 0) {
+        autoPositions = computeLayout(nodes, edges, resolvedSettings);
+      }
+    } catch {
+      autoPositions = computeLayout(nodes, edges, resolvedSettings);
+    }
+  } else {
+    autoPositions = computeLayout(nodes, edges, resolvedSettings);
+  }
+
+  return nodes.map((node) => ({
+    ...node,
+    position: preservedPositions.get(node.id) ?? autoPositions.get(node.id) ?? node.position,
+  }));
+}
+
+export async function relayoutNodes(
   nodes: TableFlowNode[],
   edges: Edge[],
   settings?: DiagramSettings,
-): { nodes: TableFlowNode[]; edges: Edge[] } {
-  const laidOutNodes = layoutTableNodes(nodes, edges, new Map(), settings);
+): Promise<{ nodes: TableFlowNode[]; edges: Edge[] }> {
+  const resolvedSettings = mergeDiagramSettings(settings);
+  const laidOutNodes = await layoutTableNodes(nodes, edges, new Map(), resolvedSettings);
   return {
     nodes: laidOutNodes,
-    edges: optimizeEdgeHandles(laidOutNodes, edges),
+    edges: optimizeEdgeHandles(laidOutNodes, edges, resolvedSettings.columnView),
   };
 }

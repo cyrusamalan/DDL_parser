@@ -24,3 +24,69 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+.erd-canvas-chrome .erd-minimap,
+.erd-canvas-chrome .erd-controls {
+  position: relative !important;
+  top: auto !important;
+  right: auto !important;
+  bottom: auto !important;
+  left: auto !important;
+  margin: 0 !important;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.15);
+}
+
+.erd-canvas-chrome .erd-minimap {
+  border: 1px solid #000;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  background: #fff;
+  --xy-minimap-background-color: #fff;
+  --xy-minimap-node-background-color: #e4e4e7;
+  --xy-minimap-node-stroke-color: #000;
+  --xy-minimap-node-stroke-width: 1.5;
+  --xy-minimap-mask-stroke-color: #000;
+  --xy-minimap-mask-stroke-width: 2;
+}
+
+.erd-canvas-chrome .erd-controls {
+  border: 1px solid #000;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  background: #fff;
+}
+
+.erd-canvas-chrome .erd-controls-btn {
+  display: flex;
+  height: 28px;
+  width: 28px;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-bottom: 1px solid #000;
+  background: #fff;
+  cursor: pointer;
+}
+
+.erd-canvas-chrome .erd-controls-btn:last-child {
+  border-bottom: none;
+}
+
+.erd-canvas-chrome .erd-controls-btn:hover:not(:disabled) {
+  background: #f4f4f5;
+}
+
+.erd-canvas-chrome .erd-controls-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.35;
+}
+
+.erd-canvas-chrome .erd-controls-icon {
+  height: 16px;
+  width: 16px;
+  color: #000;
+  stroke: #000;
+  paint-order: stroke fill;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}

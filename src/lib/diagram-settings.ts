@@ -2,8 +2,11 @@ import type { DiagramSettings } from "@/lib/types/diagram";
 
 export const DEFAULT_DIAGRAM_SETTINGS: DiagramSettings = {
   layoutDirection: "vertical",
+  layoutEngine: "elk",
   gridSize: 5,
   spacing: "normal",
+  columnView: "keysOnly",
+  hideIsolatedTables: false,
   showMinimap: true,
   autoFitOnLayout: true,
 };
@@ -33,11 +36,14 @@ export function mergeDiagramSettings(saved?: Partial<DiagramSettings> | null): D
   return {
     layoutDirection:
       saved.layoutDirection === "landscape" ? "landscape" : "vertical",
+    layoutEngine: saved.layoutEngine === "grid" ? "grid" : "elk",
     gridSize: validGridSize,
     spacing:
       saved.spacing === "compact" || saved.spacing === "roomy"
         ? saved.spacing
         : "normal",
+    columnView: saved.columnView === "full" ? "full" : "keysOnly",
+    hideIsolatedTables: saved.hideIsolatedTables ?? DEFAULT_DIAGRAM_SETTINGS.hideIsolatedTables,
     showMinimap: saved.showMinimap ?? DEFAULT_DIAGRAM_SETTINGS.showMinimap,
     autoFitOnLayout:
       saved.autoFitOnLayout ?? DEFAULT_DIAGRAM_SETTINGS.autoFitOnLayout,

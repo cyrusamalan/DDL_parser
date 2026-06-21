@@ -19,6 +19,40 @@ function layoutLandscapeStar(childCount, gridSize) {
   return { width, height };
 }
 
+async function smokeElkLayout() {
+  const ELK = require("elkjs/lib/elk.bundled.js");
+  const elk = new ELK.default();
+
+  const nodes = [
+    { id: "users", width: TABLE_WIDTH, height: 120 },
+    { id: "posts", width: TABLE_WIDTH, height: 100 },
+    { id: "comments", width: TABLE_WIDTH, height: 90 },
+  ];
+
+  const graph = {
+    id: "root",
+    layoutOptions: {
+      "elk.algorithm": "layered",
+      "elk.direction": "RIGHT",
+      "elk.edgeRouting": "ORTHOGONAL",
+    },
+    children: nodes,
+    edges: [
+      { id: "e1", sources: ["posts"], targets: ["users"] },
+      { id: "e2", sources: ["comments"], targets: ["posts"] },
+    ],
+  };
+
+  const layouted = await elk.layout(graph);
+  assert.ok(Array.isArray(layouted.children), "ELK should return positioned children");
+  assert.equal(layouted.children.length, 3, "ELK should position all nodes");
+
+  for (const child of layouted.children) {
+    assert.ok(Number.isFinite(child.x), `node ${child.id} should have finite x`);
+    assert.ok(Number.isFinite(child.y), `node ${child.id} should have finite y`);
+  }
+}
+
 const vertical = layoutVerticalStar(20, 5);
 const landscape = layoutLandscapeStar(20, 4);
 
@@ -30,5 +64,12 @@ assert.notStrictEqual(
   "layout directions should produce different aspect ratios",
 );
 
-console.log(JSON.stringify({ vertical, landscape }));
-console.log("Layout smoke test passed.");
+smokeElkLayout()
+  .then(() => {
+    console.log(JSON.stringify({ vertical, landscape }));
+    console.log("Layout smoke test passed.");
+  })
+  .catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });

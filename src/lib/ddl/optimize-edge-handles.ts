@@ -1,12 +1,16 @@
 import type { Edge } from "@xyflow/react";
 import { Position } from "@xyflow/react";
 import {
+  TABLE_HEADER_HEIGHT,
+  TABLE_ROW_HEIGHT,
   TABLE_WIDTH,
   estimateTableNodeHeight,
 } from "./node-metrics";
 import type { TableFlowNode } from "../types/diagram";
+import type { DiagramColumnView } from "../types/diagram";
+import { visibleRowIndexForColumn } from "./visible-columns";
 
-export { TABLE_WIDTH, TABLE_HEADER_HEIGHT, TABLE_ROW_HEIGHT, estimateTableNodeHeight } from "./node-metrics";
+export { TABLE_WIDTH, TABLE_HEADER_HEIGHT, TABLE_ROW_HEIGHT, columnHandleOffsetY, estimateTableNodeHeight } from "./node-metrics";
 
 export type HandleSide = "left" | "right" | "top" | "bottom";
 
@@ -17,22 +21,48 @@ const POSITION_BY_SIDE: Record<HandleSide, Position> = {
   bottom: Position.Bottom,
 };
 
-function estimateNodeCenter(node: TableFlowNode): { x: number; y: number } {
-  const height = estimateTableNodeHeight(node);
-  return {
-    x: node.position.x + TABLE_WIDTH / 2,
-    y: node.position.y + height / 2,
-  };
+function columnCenterY(
+  node: TableFlowNode,
+  columnName: string,
+  columnView: DiagramColumnView,
+): number {
+  const rowIndex = visibleRowIndexForColumn(node.data.columns, columnName, columnView);
+  return node.position.y + TABLE_HEADER_HEIGHT + rowIndex * TABLE_ROW_HEIGHT + TABLE_ROW_HEIGHT / 2;
+}
+
+function estimateNodeHeight(node: TableFlowNode, columnView: DiagramColumnView): number {
+  return estimateTableNodeHeight(node, columnView);
+}
+
+function columnCenterX(node: TableFlowNode): number {
+  return node.position.x + TABLE_WIDTH / 2;
+}
+
+export function columnIndexForColumn(node: TableFlowNode, columnName: string): number {
+  const index = node.data.columns.findIndex((column) => column.name === columnName);
+  return index >= 0 ? index : 0;
 }
 
 export function pickHandleSides(
   sourceNode: TableFlowNode,
   targetNode: TableFlowNode,
+  sourceColumnName?: string,
+  targetColumnName?: string,
+  columnView: DiagramColumnView = "full",
 ): { sourceSide: HandleSide; targetSide: HandleSide } {
-  const sourceCenter = estimateNodeCenter(sourceNode);
-  const targetCenter = estimateNodeCenter(targetNode);
-  const dx = targetCenter.x - sourceCenter.x;
-  const dy = targetCenter.y - sourceCenter.y;
+  const sourceX = columnCenterX(sourceNode);
+  const targetX = columnCenterX(targetNode);
+  const sourceY =
+    sourceColumnName !== undefined
+      ? columnCenterY(sourceNode, sourceColumnName, columnView)
+      : nodeCenterY(sourceNode, columnView);
+  const targetY =
+    targetColumnName !== undefined
+      ? columnCenterY(targetNode, targetColumnName, columnView)
+      : nodeCenterY(targetNode, columnView);
+
+  const dx = targetX - sourceX;
+  const dy = targetY - sourceY;
 
   if (Math.abs(dx) >= Math.abs(dy)) {
     if (dx >= 0) {
@@ -47,11 +77,19 @@ export function pickHandleSides(
   return { sourceSide: "top", targetSide: "bottom" };
 }
 
+function nodeCenterY(node: TableFlowNode, columnView: DiagramColumnView): number {
+  return node.position.y + estimateNodeHeight(node, columnView) / 2;
+}
+
 export function handleId(column: string, role: "source" | "target", side: HandleSide): string {
   return `${column}-${role}-${side}`;
 }
 
-export function optimizeEdgeHandles(nodes: TableFlowNode[], edges: Edge[]): Edge[] {
+export function optimizeEdgeHandles(
+  nodes: TableFlowNode[],
+  edges: Edge[],
+  columnView: DiagramColumnView = "full",
+): Edge[] {
   const nodeById = new Map(nodes.map((node) => [node.id, node]));
 
   return edges.map((edge) => {
@@ -66,12 +104,18 @@ export function optimizeEdgeHandles(nodes: TableFlowNode[], edges: Edge[]): Edge
 
     if (!sourceColumn || !targetColumn) return edge;
 
-    const { sourceSide, targetSide } = pickHandleSides(sourceNode, targetNode);
+    const { sourceSide, targetSide } = pickHandleSides(
+      sourceNode,
+      targetNode,
+      sourceColumn,
+      targetColumn,
+      columnView,
+    );
 
     return {
       ...edge,
       type: "smoothstep",
-      pathOptions: { borderRadius: 12 },
+      pathOptions: { borderRadius: 8 },
       sourceHandle: handleId(sourceColumn, "source", sourceSide),
       targetHandle: handleId(targetColumn, "target", targetSide),
       sourcePosition: POSITION_BY_SIDE[sourceSide],

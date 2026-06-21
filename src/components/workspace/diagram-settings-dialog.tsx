@@ -7,6 +7,7 @@ import type { DiagramSettings } from "@/lib/types/diagram";
 type DiagramSettingsDialogProps = {
   open: boolean;
   settings: DiagramSettings;
+  isApplying?: boolean;
   onSettingsChange: (settings: DiagramSettings) => void;
   onApply: () => void;
   onClose: () => void;
@@ -72,6 +73,7 @@ function LayoutPreview({ direction }: { direction: DiagramSettings["layoutDirect
 export function DiagramSettingsDialog({
   open,
   settings,
+  isApplying = false,
   onSettingsChange,
   onApply,
   onClose,
@@ -115,12 +117,45 @@ export function DiagramSettingsDialog({
             Diagram settings
           </h2>
           <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-            Adjust layout and canvas display. Click Apply layout to reposition tables without
-            re-parsing DDL.
+            Adjust layout, filters, and canvas display. Click Apply layout to reposition tables
+            after changing layout or keys-only view.
           </p>
         </div>
 
         <div className="space-y-5 px-5 py-4">
+          <div>
+            <span className="mb-2 block text-sm font-medium text-zinc-900 dark:text-zinc-100">
+              Layout engine
+            </span>
+            <div className="grid grid-cols-2 gap-2">
+              {(
+                [
+                  { value: "elk" as const, label: "Structured", hint: "Fewer crossings" },
+                  { value: "grid" as const, label: "Grid", hint: "Simple rows" },
+                ] as const
+              ).map(({ value, label, hint }) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => onSettingsChange({ ...settings, layoutEngine: value })}
+                  className={`rounded-lg border px-3 py-2 text-left transition ${
+                    settings.layoutEngine === value
+                      ? "border-zinc-900 bg-zinc-50 ring-2 ring-zinc-900/10 dark:border-zinc-100 dark:bg-zinc-800 dark:ring-zinc-100/10"
+                      : "border-zinc-200 hover:border-zinc-300 dark:border-zinc-700 dark:hover:border-zinc-600"
+                  }`}
+                >
+                  <span className="block text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                    {label}
+                  </span>
+                  <span className="mt-0.5 block text-xs text-zinc-500 dark:text-zinc-400">{hint}</span>
+                </button>
+              ))}
+            </div>
+            <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
+              Structured reduces line crossings for large schemas.
+            </p>
+          </div>
+
           <div>
             <span className="mb-2 block text-sm font-medium text-zinc-900 dark:text-zinc-100">
               Layout direction
@@ -202,6 +237,27 @@ export function DiagramSettingsDialog({
           </div>
 
           <div className="space-y-4 border-t border-zinc-200 pt-4 dark:border-zinc-800">
+            <span className="block text-sm font-medium text-zinc-900 dark:text-zinc-100">Filters</span>
+            <Toggle
+              label="Keys only"
+              description="Show only primary and foreign key columns in each table"
+              checked={settings.columnView === "keysOnly"}
+              onChange={(keysOnly) =>
+                onSettingsChange({ ...settings, columnView: keysOnly ? "keysOnly" : "full" })
+              }
+            />
+            <Toggle
+              label="Hide isolated"
+              description="Hide tables with no foreign key relationships"
+              checked={settings.hideIsolatedTables}
+              onChange={(hideIsolatedTables) =>
+                onSettingsChange({ ...settings, hideIsolatedTables })
+              }
+            />
+          </div>
+
+          <div className="space-y-4 border-t border-zinc-200 pt-4 dark:border-zinc-800">
+            <span className="block text-sm font-medium text-zinc-900 dark:text-zinc-100">Canvas</span>
             <Toggle
               label="Show minimap"
               description="Small overview map in the corner of the canvas"
@@ -228,9 +284,10 @@ export function DiagramSettingsDialog({
           <button
             type="button"
             onClick={onApply}
-            className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
+            disabled={isApplying}
+            className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
           >
-            Apply layout
+            {isApplying ? "Applying…" : "Apply layout"}
           </button>
         </div>
       </div>

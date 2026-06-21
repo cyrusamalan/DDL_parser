@@ -38,7 +38,7 @@ export async function parsePostgresDdl(
       };
     }
 
-    const graph = ddlSchemaToFlow(schema, existingNodes, settings);
+    const graph = await ddlSchemaToFlow(schema, existingNodes, settings);
     return { ok: true, schema, graph, sanitizeNotes };
   } catch (error) {
     return { ok: false, error: formatParseError(error) };
