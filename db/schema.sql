@@ -1,0 +1,23 @@
+CREATE TABLE IF NOT EXISTS diagrams (
+  id SERIAL PRIMARY KEY,
+  user_id VARCHAR(255) NOT NULL,
+  project_name VARCHAR(100) NOT NULL,
+  canvas_state JSONB NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_diagrams_user ON diagrams(user_id);
+
+CREATE OR REPLACE FUNCTION set_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = CURRENT_TIMESTAMP;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS diagrams_updated_at ON diagrams;
+CREATE TRIGGER diagrams_updated_at
+  BEFORE UPDATE ON diagrams
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
