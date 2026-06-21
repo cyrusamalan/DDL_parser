@@ -11,6 +11,8 @@
     "test:ddl": "node scripts/smoke-ddl.cjs",
     "test:sanitize": "node scripts/smoke-sanitize-ddl.cjs",
     "test:layout": "node scripts/smoke-layout.cjs",
+    "test:linter": "node scripts/smoke-schema-linter.cjs",
+    "test:bottlenecks": "node scripts/smoke-schema-bottlenecks.cjs",
     "test:upload": "node scripts/smoke-read-sql-file.cjs"
   },
   "dependencies": {

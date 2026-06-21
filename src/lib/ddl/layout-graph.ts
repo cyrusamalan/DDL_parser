@@ -1,9 +1,10 @@
 import type { Edge } from "@xyflow/react";
 import { mergeDiagramSettings, spacingMultiplier } from "@/lib/diagram-settings";
 import { elkLayoutTableNodes } from "@/lib/ddl/elk-layout";
+import { buildNodePartitions } from "@/lib/ddl/table-grouping";
 import { optimizeEdgeHandles } from "@/lib/ddl/optimize-edge-handles";
 import { TABLE_WIDTH, estimateTableNodeHeight } from "./node-metrics";
-import type { DiagramSettings, TableFlowNode } from "@/lib/types/diagram";
+import type { DiagramGrouping, DiagramSettings, TableFlowNode } from "@/lib/types/diagram";
 
 const BASE_HORIZONTAL_GAP = 48;
 const BASE_VERTICAL_GAP = 72;
@@ -197,11 +198,65 @@ function layoutLevelGrid(
   return layoutGridVertical(nodeIds, nodeById, startX, startY, settings.gridSize, gaps, settings.columnView);
 }
 
+function computeClusteredGridLayout(
+  nodes: TableFlowNode[],
+  settings: DiagramSettings,
+  grouping?: DiagramGrouping,
+): Map<string, { x: number; y: number }> {
+  const partitions = buildNodePartitions(grouping, nodes.map((node) => node.id));
+  if (!partitions) {
+    return new Map();
+  }
+
+  const nodeById = new Map(nodes.map((node) => [node.id, node]));
+  const gaps = resolveGaps(settings);
+  const positions = new Map<string, { x: number; y: number }>();
+  const buckets = new Map<number, string[]>();
+
+  for (const node of nodes) {
+    const partition = partitions.get(node.id) ?? 0;
+    const bucket = buckets.get(partition) ?? [];
+    bucket.push(node.id);
+    buckets.set(partition, bucket);
+  }
+
+  const sortedPartitions = [...buckets.keys()].sort((a, b) => a - b);
+  let offsetX = 0;
+  let offsetY = 0;
+
+  for (const partition of sortedPartitions) {
+    const ids = (buckets.get(partition) ?? []).sort((a, b) => a.localeCompare(b));
+    if (ids.length === 0) continue;
+
+    const grid = layoutLevelGrid(ids, nodeById, 0, 0, settings, gaps);
+    for (const [id, pos] of grid.positions) {
+      positions.set(id, {
+        x: pos.x + offsetX,
+        y: pos.y + offsetY,
+      });
+    }
+
+    if (settings.layoutDirection === "landscape") {
+      offsetX += grid.width + gaps.levelGap;
+    } else {
+      offsetY += grid.height + gaps.levelGap;
+    }
+  }
+
+  return positions;
+}
+
 function computeLayout(
   nodes: TableFlowNode[],
   edges: Edge[],
   settings: DiagramSettings,
+  grouping?: DiagramGrouping,
 ): Map<string, { x: number; y: number }> {
+  const clustered = computeClusteredGridLayout(nodes, settings, grouping);
+  if (clustered.size > 0) {
+    return clustered;
+  }
+
   const nodeById = new Map(nodes.map((node) => [node.id, node]));
   const nodeIds = nodes.map((node) => node.id);
   const { levels, orphans } = buildHierarchy(nodeIds, edges);
@@ -293,11 +348,12 @@ export function layoutTableNodesSync(
   edges: Edge[],
   preservedPositions: Map<string, { x: number; y: number }> = new Map(),
   settings?: DiagramSettings,
+  grouping?: DiagramGrouping,
 ): TableFlowNode[] {
   if (nodes.length === 0) return nodes;
 
   const resolvedSettings = mergeDiagramSettings(settings);
-  const autoPositions = computeLayout(nodes, edges, resolvedSettings);
+  const autoPositions = computeLayout(nodes, edges, resolvedSettings, grouping);
 
   return nodes.map((node) => ({
     ...node,
@@ -310,6 +366,7 @@ export async function layoutTableNodes(
   edges: Edge[],
   preservedPositions: Map<string, { x: number; y: number }> = new Map(),
   settings?: DiagramSettings,
+  grouping?: DiagramGrouping,
 ): Promise<TableFlowNode[]> {
   if (nodes.length === 0) return nodes;
 
@@ -319,15 +376,15 @@ export async function layoutTableNodes(
 
   if (resolvedSettings.layoutEngine === "elk") {
     try {
-      autoPositions = await elkLayoutTableNodes(nodes, edges, resolvedSettings);
+      autoPositions = await elkLayoutTableNodes(nodes, edges, resolvedSettings, grouping);
       if (autoPositions.size === 0) {
-        autoPositions = computeLayout(nodes, edges, resolvedSettings);
+        autoPositions = computeLayout(nodes, edges, resolvedSettings, grouping);
       }
     } catch {
-      autoPositions = computeLayout(nodes, edges, resolvedSettings);
+      autoPositions = computeLayout(nodes, edges, resolvedSettings, grouping);
     }
   } else {
-    autoPositions = computeLayout(nodes, edges, resolvedSettings);
+    autoPositions = computeLayout(nodes, edges, resolvedSettings, grouping);
   }
 
   return nodes.map((node) => ({
@@ -340,9 +397,10 @@ export async function relayoutNodes(
   nodes: TableFlowNode[],
   edges: Edge[],
   settings?: DiagramSettings,
+  grouping?: DiagramGrouping,
 ): Promise<{ nodes: TableFlowNode[]; edges: Edge[] }> {
   const resolvedSettings = mergeDiagramSettings(settings);
-  const laidOutNodes = await layoutTableNodes(nodes, edges, new Map(), resolvedSettings);
+  const laidOutNodes = await layoutTableNodes(nodes, edges, new Map(), resolvedSettings, grouping);
   return {
     nodes: laidOutNodes,
     edges: optimizeEdgeHandles(laidOutNodes, edges, resolvedSettings.columnView),

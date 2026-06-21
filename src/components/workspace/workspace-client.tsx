@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { useCallback, useState, useTransition } from "react";
 import {
   applyEdgeChanges,
   applyNodeChanges,
@@ -18,7 +18,6 @@ import { SqlImportPanel } from "@/components/workspace/sql-import-panel";
 import { TableGroupsPanel } from "@/components/workspace/table-groups-panel";
 import {
   useRegisterWorkspaceHeader,
-  type SaveStatus,
 } from "@/components/workspace/workspace-header-context";
 import { optimizeEdgeHandles } from "@/lib/ddl/optimize-edge-handles";
 import { relayoutNodes } from "@/lib/ddl/layout-graph";
@@ -33,7 +32,6 @@ import {
   unassignTable,
 } from "@/lib/ddl/table-grouping";
 import { mergeDiagramSettings } from "@/lib/diagram-settings";
-import { useDebouncedCallback } from "@/lib/hooks/use-debounced-callback";
 import { APP_MAIN_HEIGHT } from "@/lib/layout-constants";
 import type { AiGroupingPreview } from "@/lib/ai/gemini-grouping";
 import type {
@@ -51,46 +49,51 @@ type WorkspaceClientProps = {
 
 export function WorkspaceClient({ diagram }: WorkspaceClientProps) {
   const initialNodes = diagram.canvas_state.nodes ?? [];
+  const initialEdges = optimizeEdgeHandles(
+    initialNodes,
+    diagram.canvas_state.edges ?? [],
+    mergeDiagramSettings(diagram.canvas_state.diagramSettings).columnView,
+  );
+  const initialGrouping = mergeGrouping(diagram.canvas_state.grouping);
+  const hasInitialTableGroups =
+    initialGrouping.groups.length > 0 ||
+    Object.keys(initialGrouping.assignments).length > 0;
   const [projectName, setProjectName] = useState(diagram.project_name);
   const [sql, setSql] = useState(diagram.canvas_state.sql ?? "");
   const [nodes, setNodes] = useState<TableFlowNode[]>(initialNodes);
-  const [edges, setEdges] = useState<Edge[]>(() =>
-    optimizeEdgeHandles(
-      initialNodes,
-      diagram.canvas_state.edges ?? [],
-      mergeDiagramSettings(diagram.canvas_state.diagramSettings).columnView,
-    ),
-  );
+  const [edges, setEdges] = useState<Edge[]>(initialEdges);
   const [viewport, setViewport] = useState<Viewport | undefined>(
     diagram.canvas_state.viewport,
   );
   const [diagramSettings, setDiagramSettings] = useState<DiagramSettings>(() =>
     mergeDiagramSettings(diagram.canvas_state.diagramSettings),
   );
-  const [grouping, setGrouping] = useState<DiagramGrouping>(() =>
-    mergeGrouping(diagram.canvas_state.grouping),
-  );
+  const [grouping, setGrouping] = useState<DiagramGrouping>(() => initialGrouping);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [focusedNodeId, setFocusedNodeId] = useState<string | null>(null);
   const [isLayouting, setIsLayouting] = useState(false);
   const [parseError, setParseError] = useState<string | null>(null);
   const [sanitizeNotes, setSanitizeNotes] = useState<string[]>([]);
   const [isGenerating, startGenerateTransition] = useTransition();
-  const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [groupsPanelCollapsed, setGroupsPanelCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(initialNodes.length > 0);
+  const [groupsPanelCollapsed, setGroupsPanelCollapsed] = useState(hasInitialTableGroups);
   const [fitViewOnGenerate, setFitViewOnGenerate] = useState(false);
   const [isAutoGrouping, setIsAutoGrouping] = useState(false);
   const [autoGroupError, setAutoGroupError] = useState<string | null>(null);
   const [aiPreview, setAiPreview] = useState<AiGroupingPreview | null>(null);
   const [aiPreviewOpen, setAiPreviewOpen] = useState(false);
-  const skipInitialSaveRef = useRef(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState(false);
+  const [canvasRevision, setCanvasRevision] = useState(0);
+  const [savedCanvasRevision, setSavedCanvasRevision] = useState(0);
+  const [savedProjectName, setSavedProjectName] = useState(diagram.project_name);
 
-  useRegisterWorkspaceHeader({
-    projectName,
-    onProjectNameChange: setProjectName,
-    saveStatus,
-  });
+  const bumpCanvasRevision = useCallback(() => {
+    setCanvasRevision((revision) => revision + 1);
+  }, []);
+
+  const projectNameDirty = projectName !== savedProjectName;
+  const canvasDirty = canvasRevision !== savedCanvasRevision;
 
   const buildCanvasState = useCallback((): CanvasState => {
     return {
@@ -103,35 +106,51 @@ export function WorkspaceClient({ diagram }: WorkspaceClientProps) {
     };
   }, [diagramSettings, edges, grouping, nodes, sql, viewport]);
 
-  const persistCanvas = useCallback(async () => {
-    setSaveStatus("saving");
+  const handleSave = useCallback(async () => {
+    setIsSaving(true);
+    setSaveError(false);
     try {
       await updateDiagram(diagram.id, buildCanvasState(), projectName);
-      setSaveStatus("saved");
+      setSavedProjectName(projectName);
+      setSavedCanvasRevision(canvasRevision);
     } catch {
-      setSaveStatus("error");
+      setSaveError(true);
+    } finally {
+      setIsSaving(false);
     }
-  }, [buildCanvasState, diagram.id, projectName]);
+  }, [buildCanvasState, canvasRevision, diagram.id, projectName]);
 
-  const scheduleSave = useDebouncedCallback(() => {
-    void persistCanvas();
-  }, 2000);
+  const onSave = useCallback(() => {
+    void handleSave();
+  }, [handleSave]);
 
-  useEffect(() => {
-    if (skipInitialSaveRef.current) {
-      skipInitialSaveRef.current = false;
-      return;
-    }
-    scheduleSave();
-  }, [nodes, edges, viewport, sql, projectName, diagramSettings, grouping, scheduleSave]);
+  useRegisterWorkspaceHeader({
+    projectName,
+    onProjectNameChange: setProjectName,
+    projectNameDirty,
+    canvasDirty,
+    isSaving,
+    saveError,
+    onSave,
+  });
 
-  const onNodesChange = useCallback((changes: NodeChange<TableFlowNode>[]) => {
-    setNodes((current) => applyNodeChanges(changes, current));
-  }, []);
+  const onNodesChange = useCallback(
+    (changes: NodeChange<TableFlowNode>[]) => {
+      setNodes((current) => applyNodeChanges(changes, current));
+      if (changes.some((change) => change.type !== "select" && change.type !== "position")) {
+        bumpCanvasRevision();
+      }
+    },
+    [bumpCanvasRevision],
+  );
 
-  const onEdgesChange = useCallback((changes: EdgeChange[]) => {
-    setEdges((current) => applyEdgeChanges(changes, current));
-  }, []);
+  const onEdgesChange = useCallback(
+    (changes: EdgeChange[]) => {
+      setEdges((current) => applyEdgeChanges(changes, current));
+      bumpCanvasRevision();
+    },
+    [bumpCanvasRevision],
+  );
 
   const onNodeDragStop = useCallback(() => {
     setNodes((currentNodes) => {
@@ -140,8 +159,8 @@ export function WorkspaceClient({ diagram }: WorkspaceClientProps) {
       );
       return currentNodes;
     });
-    scheduleSave();
-  }, [diagramSettings.columnView, scheduleSave]);
+    bumpCanvasRevision();
+  }, [bumpCanvasRevision, diagramSettings.columnView]);
 
   const onViewportChange = useCallback((nextViewport: Viewport) => {
     setViewport(nextViewport);
@@ -149,27 +168,48 @@ export function WorkspaceClient({ diagram }: WorkspaceClientProps) {
 
   const handleCreateGroup = useCallback(() => {
     setGrouping((current) => createGroup(current));
-  }, []);
+    bumpCanvasRevision();
+  }, [bumpCanvasRevision]);
 
-  const handleRenameGroup = useCallback((groupId: string, name: string) => {
-    setGrouping((current) => renameGroup(current, groupId, name));
-  }, []);
+  const handleRenameGroup = useCallback(
+    (groupId: string, name: string) => {
+      setGrouping((current) => renameGroup(current, groupId, name));
+      bumpCanvasRevision();
+    },
+    [bumpCanvasRevision],
+  );
 
-  const handleSetGroupColor = useCallback((groupId: string, color: TableGroupColor) => {
-    setGrouping((current) => setGroupColor(current, groupId, color));
-  }, []);
+  const handleSetGroupColor = useCallback(
+    (groupId: string, color: TableGroupColor) => {
+      setGrouping((current) => setGroupColor(current, groupId, color));
+      bumpCanvasRevision();
+    },
+    [bumpCanvasRevision],
+  );
 
-  const handleDeleteGroup = useCallback((groupId: string) => {
-    setGrouping((current) => deleteGroup(current, groupId));
-  }, []);
+  const handleDeleteGroup = useCallback(
+    (groupId: string) => {
+      setGrouping((current) => deleteGroup(current, groupId));
+      bumpCanvasRevision();
+    },
+    [bumpCanvasRevision],
+  );
 
-  const handleAssignTable = useCallback((nodeId: string, groupId: string) => {
-    setGrouping((current) => assignTable(current, nodeId, groupId));
-  }, []);
+  const handleAssignTable = useCallback(
+    (nodeId: string, groupId: string) => {
+      setGrouping((current) => assignTable(current, nodeId, groupId));
+      bumpCanvasRevision();
+    },
+    [bumpCanvasRevision],
+  );
 
-  const handleUnassignTable = useCallback((nodeId: string) => {
-    setGrouping((current) => unassignTable(current, nodeId));
-  }, []);
+  const handleUnassignTable = useCallback(
+    (nodeId: string) => {
+      setGrouping((current) => unassignTable(current, nodeId));
+      bumpCanvasRevision();
+    },
+    [bumpCanvasRevision],
+  );
 
   const handleAutoGroupRequest = useCallback(async () => {
     setAutoGroupError(null);
@@ -189,13 +229,32 @@ export function WorkspaceClient({ diagram }: WorkspaceClientProps) {
     }
   }, [edges, nodes]);
 
-  const handleApplyAiGrouping = useCallback(() => {
+  const handleApplyAiGrouping = useCallback(async () => {
     if (!aiPreview) return;
-    setGrouping(aiPreview.grouping);
+    const nextGrouping = aiPreview.grouping;
+    setGrouping(nextGrouping);
+    bumpCanvasRevision();
     setAiPreviewOpen(false);
     setAiPreview(null);
     setAutoGroupError(null);
-  }, [aiPreview]);
+    setGroupsPanelCollapsed(true);
+    setIsLayouting(true);
+    try {
+      const { nodes: nextNodes, edges: nextEdges } = await relayoutNodes(
+        nodes,
+        edges,
+        diagramSettings,
+        nextGrouping,
+      );
+      setNodes(nextNodes);
+      setEdges(nextEdges);
+      setFocusedNodeId(null);
+      setFitViewOnGenerate(true);
+      bumpCanvasRevision();
+    } finally {
+      setIsLayouting(false);
+    }
+  }, [aiPreview, bumpCanvasRevision, diagramSettings, edges, nodes]);
 
   const handleCloseAiPreview = useCallback(() => {
     setAiPreviewOpen(false);
@@ -223,12 +282,14 @@ export function WorkspaceClient({ diagram }: WorkspaceClientProps) {
         setGrouping((current) =>
           pruneAssignments(current, result.graph.nodes.map((node) => node.id)),
         );
+        bumpCanvasRevision();
+        setSidebarCollapsed(true);
         if (diagramSettings.autoFitOnLayout) {
           setFitViewOnGenerate(true);
         }
       });
     },
-    [diagramSettings, sql],
+    [bumpCanvasRevision, diagramSettings, sql],
   );
 
   const handleApplyLayout = useCallback(async () => {
@@ -238,6 +299,7 @@ export function WorkspaceClient({ diagram }: WorkspaceClientProps) {
         nodes,
         edges,
         diagramSettings,
+        grouping,
       );
       setNodes(nextNodes);
       setEdges(nextEdges);
@@ -245,18 +307,35 @@ export function WorkspaceClient({ diagram }: WorkspaceClientProps) {
       if (diagramSettings.autoFitOnLayout) {
         setFitViewOnGenerate(true);
       }
+      bumpCanvasRevision();
       setSettingsOpen(false);
     } finally {
       setIsLayouting(false);
     }
-  }, [diagramSettings, edges, nodes]);
+  }, [bumpCanvasRevision, diagramSettings, edges, grouping, nodes]);
+
+  const handleSqlChange = useCallback(
+    (value: string) => {
+      setSql(value);
+      bumpCanvasRevision();
+    },
+    [bumpCanvasRevision],
+  );
+
+  const handleSettingsChange = useCallback(
+    (nextSettings: DiagramSettings) => {
+      setDiagramSettings(nextSettings);
+      bumpCanvasRevision();
+    },
+    [bumpCanvasRevision],
+  );
 
   return (
     <div className="flex flex-col" style={{ height: APP_MAIN_HEIGHT }}>
       <div className="flex min-h-0 flex-1">
         <SqlImportPanel
           sql={sql}
-          onSqlChange={setSql}
+          onSqlChange={handleSqlChange}
           onGenerate={handleGenerate}
           isGenerating={isGenerating}
           error={parseError}
@@ -302,7 +381,7 @@ export function WorkspaceClient({ diagram }: WorkspaceClientProps) {
         open={aiPreviewOpen}
         preview={aiPreview}
         nodes={nodes}
-        onApply={handleApplyAiGrouping}
+        onApply={() => void handleApplyAiGrouping()}
         onClose={handleCloseAiPreview}
       />
 
@@ -310,7 +389,7 @@ export function WorkspaceClient({ diagram }: WorkspaceClientProps) {
         open={settingsOpen}
         settings={diagramSettings}
         isApplying={isLayouting}
-        onSettingsChange={setDiagramSettings}
+        onSettingsChange={handleSettingsChange}
         onApply={() => void handleApplyLayout()}
         onClose={() => setSettingsOpen(false)}
       />

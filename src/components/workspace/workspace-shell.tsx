@@ -6,5 +6,5 @@ type WorkspaceShellProps = {
 };
 
 export function WorkspaceShell({ diagram }: WorkspaceShellProps) {
-  return <WorkspaceClient diagram={diagram} />;
+  return <WorkspaceClient key={diagram.id} diagram={diagram} />;
 }

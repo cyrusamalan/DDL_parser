@@ -1,8 +1,9 @@
 import type { Edge } from "@xyflow/react";
 import ELK from "elkjs/lib/elk.bundled.js";
 import { mergeDiagramSettings, spacingMultiplier } from "@/lib/diagram-settings";
+import { buildNodePartitions } from "@/lib/ddl/table-grouping";
 import { TABLE_WIDTH, estimateTableNodeHeight } from "./node-metrics";
-import type { DiagramSettings, TableFlowNode } from "@/lib/types/diagram";
+import type { DiagramGrouping, DiagramSettings, TableFlowNode } from "@/lib/types/diagram";
 
 const elk = new ELK();
 
@@ -21,25 +22,52 @@ function elkSpacing(settings: DiagramSettings): { nodeNode: number; layer: numbe
   };
 }
 
-function buildElkGraph(nodes: TableFlowNode[], edges: Edge[], settings: DiagramSettings) {
+function buildElkGraph(
+  nodes: TableFlowNode[],
+  edges: Edge[],
+  settings: DiagramSettings,
+  partitions: Map<string, number> | null,
+) {
   const spacing = elkSpacing(settings);
+
+  const layoutOptions: Record<string, string> = {
+    "elk.algorithm": "layered",
+    "elk.direction": elkDirection(settings),
+    "elk.edgeRouting": "ORTHOGONAL",
+    "elk.spacing.nodeNode": String(spacing.nodeNode),
+    "elk.layered.spacing.nodeNodeBetweenLayers": String(spacing.layer),
+    "elk.layered.crossingMinimization.strategy": "LAYER_SWEEP",
+    "elk.layered.nodePlacement.strategy": "NETWORK_SIMPLEX",
+  };
+
+  if (partitions) {
+    layoutOptions["elk.partitioning.activate"] = "true";
+  }
 
   return {
     id: "root",
-    layoutOptions: {
-      "elk.algorithm": "layered",
-      "elk.direction": elkDirection(settings),
-      "elk.edgeRouting": "ORTHOGONAL",
-      "elk.spacing.nodeNode": String(spacing.nodeNode),
-      "elk.layered.spacing.nodeNodeBetweenLayers": String(spacing.layer),
-      "elk.layered.crossingMinimization.strategy": "LAYER_SWEEP",
-      "elk.layered.nodePlacement.strategy": "NETWORK_SIMPLEX",
-    },
-    children: nodes.map((node) => ({
-      id: node.id,
-      width: TABLE_WIDTH,
-      height: estimateTableNodeHeight(node, settings.columnView),
-    })),
+    layoutOptions,
+    children: nodes.map((node) => {
+      const partition = partitions?.get(node.id);
+      const child: {
+        id: string;
+        width: number;
+        height: number;
+        layoutOptions?: Record<string, string>;
+      } = {
+        id: node.id,
+        width: TABLE_WIDTH,
+        height: estimateTableNodeHeight(node, settings.columnView),
+      };
+
+      if (partition !== undefined) {
+        child.layoutOptions = {
+          "elk.partitioning.partition": String(partition),
+        };
+      }
+
+      return child;
+    }),
     edges: edges.map((edge) => ({
       id: edge.id,
       sources: [edge.source],
@@ -52,11 +80,13 @@ export async function elkLayoutTableNodes(
   nodes: TableFlowNode[],
   edges: Edge[],
   settings?: DiagramSettings,
+  grouping?: DiagramGrouping,
 ): Promise<Map<string, { x: number; y: number }>> {
   if (nodes.length === 0) return new Map();
 
   const resolvedSettings = mergeDiagramSettings(settings);
-  const graph = buildElkGraph(nodes, edges, resolvedSettings);
+  const partitions = buildNodePartitions(grouping, nodes.map((node) => node.id));
+  const graph = buildElkGraph(nodes, edges, resolvedSettings, partitions);
   const layouted = await elk.layout(graph);
 
   const positions = new Map<string, { x: number; y: number }>();

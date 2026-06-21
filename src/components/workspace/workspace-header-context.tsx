@@ -5,16 +5,19 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
 
-export type SaveStatus = "idle" | "saving" | "saved" | "error";
-
 export type WorkspaceHeaderState = {
   projectName: string;
   onProjectNameChange: (name: string) => void;
-  saveStatus: SaveStatus;
+  projectNameDirty: boolean;
+  canvasDirty: boolean;
+  isSaving: boolean;
+  saveError: boolean;
+  onSave: () => void;
 };
 
 type WorkspaceHeaderContextValue = {
@@ -49,12 +52,32 @@ function useWorkspaceHeaderRegistration(): (state: WorkspaceHeaderState | null) 
 export function useRegisterWorkspaceHeader({
   projectName,
   onProjectNameChange,
-  saveStatus,
+  projectNameDirty,
+  canvasDirty,
+  isSaving,
+  saveError,
+  onSave,
 }: WorkspaceHeaderState): void {
   const setState = useWorkspaceHeaderRegistration();
+  const callbacksRef = useRef({ onProjectNameChange, onSave });
 
   useEffect(() => {
-    setState({ projectName, onProjectNameChange, saveStatus });
+    callbacksRef.current = { onProjectNameChange, onSave };
+  }, [onProjectNameChange, onSave]);
+
+  useEffect(() => {
+    setState({
+      projectName,
+      onProjectNameChange: (name) => callbacksRef.current.onProjectNameChange(name),
+      projectNameDirty,
+      canvasDirty,
+      isSaving,
+      saveError,
+      onSave: () => callbacksRef.current.onSave(),
+    });
+  }, [canvasDirty, isSaving, projectName, projectNameDirty, saveError, setState]);
+
+  useEffect(() => {
     return () => setState(null);
-  }, [onProjectNameChange, projectName, saveStatus, setState]);
+  }, [setState]);
 }

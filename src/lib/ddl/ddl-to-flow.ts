@@ -41,7 +41,7 @@ function buildEdges(foreignKeys: ParsedForeignKey[]): Edge[] {
       target: tableNodeId(fk.toTable),
       sourceHandle: handleId(fk.fromColumn, "source", "right"),
       targetHandle: handleId(fk.toColumn, "target", "left"),
-      type: "smoothstep",
+      type: "fkEdge",
       animated: false,
       data,
       style: { ...DEFAULT_EDGE_STYLE },

@@ -10,6 +10,31 @@ export type SchemaStats = {
   avgColumnsPerTable: number;
 };
 
+export const EMPTY_SCHEMA_STATS: SchemaStats = {
+  tableCount: 0,
+  columnCount: 0,
+  primaryKeyCount: 0,
+  foreignKeyCount: 0,
+  isolatedTableCount: 0,
+  avgColumnsPerTable: 0,
+};
+
+export function computeSchemaStatsFromCounts(counts: {
+  tableCount: number;
+  columnCount: number;
+  primaryKeyCount: number;
+  foreignKeyCount: number;
+  isolatedTableCount: number;
+}): SchemaStats {
+  return {
+    ...counts,
+    avgColumnsPerTable:
+      counts.tableCount === 0
+        ? 0
+        : Math.round((counts.columnCount / counts.tableCount) * 10) / 10,
+  };
+}
+
 export type TableStats = {
   tableName: string;
   columnCount: number;
@@ -20,16 +45,7 @@ export type TableStats = {
 };
 
 export function computeSchemaStats(nodes: TableFlowNode[], edges: Edge[]): SchemaStats {
-  if (nodes.length === 0) {
-    return {
-      tableCount: 0,
-      columnCount: 0,
-      primaryKeyCount: 0,
-      foreignKeyCount: 0,
-      isolatedTableCount: 0,
-      avgColumnsPerTable: 0,
-    };
-  }
+  if (nodes.length === 0) return EMPTY_SCHEMA_STATS;
 
   let columnCount = 0;
   let primaryKeyCount = 0;
@@ -51,14 +67,13 @@ export function computeSchemaStats(nodes: TableFlowNode[], edges: Edge[]): Schem
 
   const isolatedTableCount = nodes.filter((node) => !connectedTableIds.has(node.id)).length;
 
-  return {
+  return computeSchemaStatsFromCounts({
     tableCount: nodes.length,
     columnCount,
     primaryKeyCount,
     foreignKeyCount,
     isolatedTableCount,
-    avgColumnsPerTable: Math.round((columnCount / nodes.length) * 10) / 10,
-  };
+  });
 }
 
 export function computeTableStats(

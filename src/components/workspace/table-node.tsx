@@ -4,6 +4,7 @@ import { memo, type CSSProperties } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { Key, Link2 } from "lucide-react";
 import { useDiagramDisplay } from "@/components/workspace/diagram-display-context";
+import { useDiagramFocus, type NodeVisualState } from "@/components/workspace/diagram-focus-context";
 import { groupStyles } from "@/lib/ddl/table-grouping";
 import type { HandleSide } from "@/lib/ddl/optimize-edge-handles";
 import { TABLE_ROW_HEIGHT } from "@/lib/ddl/node-metrics";
@@ -56,9 +57,26 @@ function rowClassName(isPrimaryKey: boolean, isForeignKey: boolean): string {
   return "bg-white dark:bg-zinc-900";
 }
 
+function nodeVisualClassName(state: NodeVisualState): string {
+  switch (state) {
+    case "focused":
+      return "relative z-10 ring-2 ring-sky-500 ring-offset-2 ring-offset-zinc-100 opacity-100 dark:ring-offset-zinc-950";
+    case "connected":
+      return "relative z-[5] ring-1 ring-sky-300/80 opacity-100 dark:ring-sky-600/80";
+    case "dimmed":
+      return "opacity-35";
+    case "search":
+      return "ring-2 ring-amber-400 ring-offset-2 ring-offset-zinc-100 dark:ring-offset-zinc-950";
+    default:
+      return "";
+  }
+}
+
 function TableNodeComponent({ id, data }: NodeProps) {
   const nodeData = data as TableNodeData;
   const { columnView, getGroupForNode } = useDiagramDisplay();
+  const { getNodeVisualState } = useDiagramFocus();
+  const visualState = getNodeVisualState(id);
   const { visible, hiddenCount } = getVisibleColumns(nodeData.columns, columnView);
   const group = getGroupForNode(id);
   const styles = group ? groupStyles(group.color) : null;
@@ -67,7 +85,7 @@ function TableNodeComponent({ id, data }: NodeProps) {
     <div
       className={`w-[260px] overflow-hidden rounded-xl border bg-white shadow-lg shadow-zinc-200/50 dark:bg-zinc-900 dark:shadow-black/20 ${
         styles ? styles.border : "border-zinc-300/80 dark:border-zinc-600"
-      } ${styles ? styles.bodyTint : ""}`}
+      } ${styles ? styles.bodyTint : ""} ${nodeVisualClassName(visualState)}`}
     >
       <div
         className={`border-b bg-gradient-to-r px-3 py-2.5 ${

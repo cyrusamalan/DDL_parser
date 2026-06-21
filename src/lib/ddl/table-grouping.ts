@@ -249,6 +249,28 @@ export function groupsWithAssignments(grouping: DiagramGrouping): TableGroup[] {
   return grouping.groups.filter((group) => assignedGroupIds.has(group.id));
 }
 
+export function buildNodePartitions(
+  grouping: DiagramGrouping | undefined,
+  nodeIds: string[],
+): Map<string, number> | null {
+  if (!grouping || Object.keys(grouping.assignments).length === 0) {
+    return null;
+  }
+
+  const groupPartition = new Map<string, number>();
+  grouping.groups.forEach((group, index) => {
+    groupPartition.set(group.id, index + 1);
+  });
+
+  const partitions = new Map<string, number>();
+  for (const nodeId of nodeIds) {
+    const groupId = grouping.assignments[nodeId];
+    partitions.set(nodeId, groupId ? (groupPartition.get(groupId) ?? 0) : 0);
+  }
+
+  return partitions;
+}
+
 export type AiGroupingSuggestion = {
   groups: {
     name: string;
