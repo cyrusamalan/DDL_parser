@@ -17,6 +17,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "DDL ERD Visualizer",
   description: "Turn PostgreSQL DDL into interactive entity relationship diagrams.",
+  icons: {
+    icon: "/logo.svg",
+  },
 };
 
 export default function RootLayout({

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Database } from "lucide-react";
+import { AppLogo } from "@/components/app-logo";
 import type { ReactNode } from "react";
 
 type AuthPageShellProps = {
@@ -43,10 +43,8 @@ export function AuthPageShell({
       <aside className="relative hidden w-[44%] max-w-xl overflow-hidden border-r border-zinc-200 bg-zinc-900 px-10 py-12 text-white lg:flex lg:flex-col lg:justify-between dark:border-zinc-800">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,_rgba(14,165,233,0.18),_transparent_55%)]" />
         <div className="relative">
-          <Link href="/" className="inline-flex items-center gap-2.5">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/10 ring-1 ring-white/15">
-              <Database className="h-5 w-5" />
-            </span>
+          <Link href="/" className="inline-flex items-center gap-3">
+            <AppLogo className="h-11 w-11 text-white" />
             <span className="text-sm font-semibold tracking-tight">DDL ERD Visualizer</span>
           </Link>
           <h1 className="mt-10 text-3xl font-semibold tracking-tight">
@@ -76,10 +74,8 @@ export function AuthPageShell({
       <div className="flex flex-1 items-center justify-center px-4 py-10 sm:px-6">
         <div className="w-full max-w-md">
           <div className="mb-8 lg:hidden">
-            <Link href="/" className="inline-flex items-center gap-2 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900">
-                <Database className="h-4 w-4" />
-              </span>
+            <Link href="/" className="inline-flex items-center gap-2.5 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+              <AppLogo className="h-9 w-9" />
               DDL ERD Visualizer
             </Link>
           </div>

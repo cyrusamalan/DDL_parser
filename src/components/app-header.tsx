@@ -3,7 +3,7 @@
 import { Show, UserButton } from "@clerk/nextjs";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Database } from "lucide-react";
+import { AppLogo } from "@/components/app-logo";
 import { APP_HEADER_HEIGHT } from "@/lib/layout-constants";
 import { useWorkspaceHeaderState } from "@/components/workspace/workspace-header-context";
 
@@ -75,12 +75,10 @@ export function AppHeader() {
       >
         <Link
           href="/dashboard"
-          className="flex items-center transition hover:opacity-80"
+          className="flex h-full items-center py-1.5 text-zinc-900 transition hover:opacity-80 dark:text-zinc-100"
           aria-label="Go to dashboard"
         >
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900">
-            <Database className="h-4 w-4" />
-          </span>
+          <AppLogo className="h-9 w-9 sm:h-10 sm:w-10" />
         </Link>
       </div>
 
