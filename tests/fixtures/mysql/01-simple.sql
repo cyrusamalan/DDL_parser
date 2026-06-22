@@ -1,0 +1,8 @@
+CREATE TABLE `users` (
+  `id` INT NOT NULL AUTO_INCREMENT,
+  `email` VARCHAR(255) NOT NULL,
+  `name` VARCHAR(100),
+  `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_email` (`email`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

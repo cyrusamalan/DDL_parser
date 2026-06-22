@@ -1,0 +1,8 @@
+CREATE TABLE [dbo].[users] (
+  [id] INT IDENTITY(1,1) NOT NULL,
+  [email] NVARCHAR(255) NOT NULL,
+  [name] NVARCHAR(100) NULL,
+  [created_at] DATETIME2 DEFAULT GETDATE(),
+  CONSTRAINT [PK_users] PRIMARY KEY ([id])
+) ON [PRIMARY];
+GO
