@@ -25,6 +25,66 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+/* ---- Landing hero animation ---- */
+
+/* Slow diagonal drift of the blueprint grid. */
+@keyframes grid-pan {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: 60px 60px;
+  }
+}
+
+/* Continuous upward scroll of the SQL code track. */
+@keyframes code-scroll {
+  0% {
+    transform: translateY(0);
+  }
+  100% {
+    transform: translateY(-50%);
+  }
+}
+
+/* Draw an SVG edge in by retracting its dash offset. */
+@keyframes edge-draw {
+  from {
+    stroke-dashoffset: var(--edge-length, 400);
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Gentle bob for the settled ERD cards. */
+@keyframes float-y {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+/* Soft pulsing glow for accents. */
+@keyframes glow-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-animated {
+    animation: none !important;
+  }
+}
+
 .erd-canvas-chrome .erd-minimap,
 .erd-canvas-chrome .erd-controls {
   position: relative !important;
