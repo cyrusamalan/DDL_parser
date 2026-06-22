@@ -234,6 +234,9 @@ export function DiagramSettingsDialog({
               <option value="normal">Normal</option>
               <option value="roomy">Roomy</option>
             </select>
+            <p className="mt-1.5 text-xs text-zinc-500 dark:text-zinc-400">
+              Re-apply layout to update table positions.
+            </p>
           </div>
 
           <div className="space-y-4 border-t border-zinc-200 pt-4 dark:border-zinc-800">

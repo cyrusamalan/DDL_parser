@@ -16,11 +16,22 @@ export const GRID_SIZE_OPTIONS = [3, 4, 5, 6] as const;
 export function spacingMultiplier(spacing: DiagramSettings["spacing"]): number {
   switch (spacing) {
     case "compact":
-      return 0.7;
+      return 0.5;
     case "roomy":
-      return 1.4;
+      return 2;
     default:
       return 1;
+  }
+}
+
+export function fitViewPaddingForSpacing(spacing: DiagramSettings["spacing"]): number {
+  switch (spacing) {
+    case "compact":
+      return 0.06;
+    case "roomy":
+      return 0.28;
+    default:
+      return 0.12;
   }
 }
 

@@ -6,10 +6,10 @@ import { optimizeEdgeHandles } from "@/lib/ddl/optimize-edge-handles";
 import { TABLE_WIDTH, estimateTableNodeHeight } from "./node-metrics";
 import type { DiagramGrouping, DiagramSettings, TableFlowNode } from "@/lib/types/diagram";
 
-const BASE_HORIZONTAL_GAP = 48;
-const BASE_VERTICAL_GAP = 72;
-const BASE_LEVEL_GAP = 96;
-const BASE_ORPHAN_SECTION_GAP = 120;
+const BASE_HORIZONTAL_GAP = 56;
+const BASE_VERTICAL_GAP = 88;
+const BASE_LEVEL_GAP = 120;
+const BASE_ORPHAN_SECTION_GAP = 144;
 
 type LayoutGaps = {
   horizontalGap: number;

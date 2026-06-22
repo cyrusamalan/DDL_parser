@@ -24,6 +24,7 @@ import { ErdZoomControls } from "@/components/workspace/erd-zoom-controls";
 import { FkEdge } from "@/components/workspace/fk-edge";
 import { SchemaInfoPanel } from "@/components/workspace/schema-info-panel";
 import { TableNode } from "@/components/workspace/table-node";
+import { fitViewPaddingForSpacing } from "@/lib/diagram-settings";
 import { DEFAULT_EDGE_COLOR, DEFAULT_EDGE_STYLE } from "@/lib/ddl/edge-styles";
 import {
   groupFocusLabel,
@@ -390,8 +391,13 @@ function ErdCanvasInner({
   );
 
   const fitDiagram = useCallback(() => {
-    void fitView({ padding: 0.12, minZoom: 0.02, maxZoom: 1, duration: 300 });
-  }, [fitView]);
+    void fitView({
+      padding: fitViewPaddingForSpacing(diagramSettings.spacing),
+      minZoom: 0.02,
+      maxZoom: 1,
+      duration: 300,
+    });
+  }, [diagramSettings.spacing, fitView]);
 
   const allNodeIds = useMemo(() => nodes.map((node) => node.id), [nodes]);
 

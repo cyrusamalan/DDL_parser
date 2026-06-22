@@ -7,8 +7,8 @@ import type { DiagramGrouping, DiagramSettings, TableFlowNode } from "@/lib/type
 
 const elk = new ELK();
 
-const BASE_NODE_SPACING = 48;
-const BASE_LAYER_SPACING = 96;
+const BASE_NODE_SPACING = 56;
+const BASE_LAYER_SPACING = 120;
 
 function elkDirection(settings: DiagramSettings): string {
   return settings.layoutDirection === "landscape" ? "RIGHT" : "DOWN";
@@ -36,6 +36,8 @@ function buildElkGraph(
     "elk.edgeRouting": "ORTHOGONAL",
     "elk.spacing.nodeNode": String(spacing.nodeNode),
     "elk.layered.spacing.nodeNodeBetweenLayers": String(spacing.layer),
+    "elk.layered.spacing.edgeNodeBetweenLayers": String(spacing.layer),
+    "elk.layered.spacing.componentComponent": String(spacing.nodeNode * 2),
     "elk.layered.crossingMinimization.strategy": "LAYER_SWEEP",
     "elk.layered.nodePlacement.strategy": "NETWORK_SIMPLEX",
   };
