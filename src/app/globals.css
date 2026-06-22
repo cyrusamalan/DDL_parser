@@ -68,6 +68,18 @@ body {
   }
 }
 
+/* Blinking typewriter caret. */
+@keyframes caret-blink {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+
 /* Soft pulsing glow for accents. */
 @keyframes glow-pulse {
   0%,
