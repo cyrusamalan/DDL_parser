@@ -26,6 +26,7 @@ type TableGroupsPanelProps = {
   isAutoGrouping?: boolean;
   autoGroupError?: string | null;
   onAutoGroupRequest?: () => void;
+  readOnly?: boolean;
 };
 
 function readDraggedNodeId(event: DragEvent): string | null {
@@ -36,10 +37,12 @@ function TableChip({
   node,
   onAssign,
   groups,
+  readOnly = false,
 }: {
   node: TableFlowNode;
   onAssign?: (groupId: string) => void;
   groups: DiagramGrouping["groups"];
+  readOnly?: boolean;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -47,18 +50,22 @@ function TableChip({
     <div className="relative">
       <button
         type="button"
-        draggable
+        draggable={!readOnly}
         onDragStart={(event) => {
+          if (readOnly) return;
           event.dataTransfer.setData(NODE_ID_MIME, node.id);
           event.dataTransfer.setData("text/plain", node.id);
           event.dataTransfer.effectAllowed = "move";
         }}
         onClick={() => {
+          if (readOnly) return;
           if (onAssign && groups.length > 0) {
             setMenuOpen((value) => !value);
           }
         }}
-        className="cursor-grab rounded-md border border-zinc-200 bg-white px-2 py-1 text-left text-[11px] text-zinc-800 shadow-sm active:cursor-grabbing dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
+        className={`rounded-md border border-zinc-200 bg-white px-2 py-1 text-left text-[11px] text-zinc-800 shadow-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 ${
+          readOnly ? "cursor-default opacity-80" : "cursor-grab active:cursor-grabbing"
+        }`}
         title={node.data.tableName}
       >
         <span className="block truncate">{node.data.tableName}</span>
@@ -93,6 +100,7 @@ function DropZone({
   onDropNode,
   emptyText,
   onMoveToGroup,
+  readOnly = false,
 }: {
   label: string;
   nodeIds: string[];
@@ -101,23 +109,27 @@ function DropZone({
   onDropNode: (nodeId: string) => void;
   emptyText: string;
   onMoveToGroup?: (nodeId: string, groupId: string) => void;
+  readOnly?: boolean;
 }) {
   const handleDragOver = (event: DragEvent<HTMLDivElement>) => {
+    if (readOnly) return;
     event.preventDefault();
     event.dataTransfer.dropEffect = "move";
   };
 
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {
-    event.preventDefault();
+    if (readOnly) return;
     const nodeId = readDraggedNodeId(event);
     if (nodeId) onDropNode(nodeId);
   };
 
   return (
     <div
-      onDragOver={handleDragOver}
-      onDrop={handleDrop}
-      className="min-h-[72px] rounded-lg border border-dashed border-zinc-300 bg-zinc-50/80 p-2 dark:border-zinc-700 dark:bg-zinc-900/40"
+      onDragOver={readOnly ? undefined : handleDragOver}
+      onDrop={readOnly ? undefined : handleDrop}
+      className={`min-h-[72px] rounded-lg border border-dashed border-zinc-300 bg-zinc-50/80 p-2 dark:border-zinc-700 dark:bg-zinc-900/40 ${
+        readOnly ? "opacity-80" : ""
+      }`}
     >
       <p className="mb-2 text-[10px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
         {label}
@@ -134,6 +146,7 @@ function DropZone({
                 key={nodeId}
                 node={node}
                 groups={groups}
+                readOnly={readOnly}
                 onAssign={
                   onMoveToGroup ? (groupId) => onMoveToGroup(nodeId, groupId) : undefined
                 }
@@ -160,6 +173,7 @@ export function TableGroupsPanel({
   isAutoGrouping = false,
   autoGroupError = null,
   onAutoGroupRequest,
+  readOnly = false,
 }: TableGroupsPanelProps) {
   const nodeById = useMemo(() => new Map(nodes.map((node) => [node.id, node])), [nodes]);
   const nodeIds = useMemo(() => nodes.map((node) => node.id), [nodes]);
@@ -210,7 +224,7 @@ export function TableGroupsPanel({
           <button
             type="button"
             onClick={onCreateGroup}
-            disabled={nodes.length === 0}
+            disabled={nodes.length === 0 || readOnly}
             className="inline-flex items-center gap-1 rounded-md border border-zinc-300 bg-white px-2 py-1 text-xs font-medium text-zinc-800 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
           >
             <Plus className="h-3.5 w-3.5" />
@@ -221,7 +235,7 @@ export function TableGroupsPanel({
           <button
             type="button"
             onClick={onAutoGroupRequest}
-            disabled={nodes.length === 0 || isAutoGrouping}
+            disabled={nodes.length === 0 || isAutoGrouping || readOnly}
             className="inline-flex w-full items-center justify-center gap-1.5 rounded-md border border-violet-300 bg-violet-50 px-2 py-1.5 text-xs font-medium text-violet-900 transition hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-100 dark:hover:bg-violet-950/70"
           >
             {isAutoGrouping ? (
@@ -265,7 +279,8 @@ export function TableGroupsPanel({
                       type="button"
                       aria-label={`Set color ${color}`}
                       onClick={() => onSetGroupColor(group.id, color)}
-                      className={`h-4 w-4 rounded-full border-2 ${groupSwatchClass(color)} ${
+                      disabled={readOnly}
+                      className={`h-4 w-4 rounded-full border-2 disabled:cursor-not-allowed disabled:opacity-50 ${groupSwatchClass(color)} ${
                         group.color === color
                           ? "border-zinc-900 dark:border-zinc-100"
                           : "border-transparent opacity-80 hover:opacity-100"
@@ -276,7 +291,8 @@ export function TableGroupsPanel({
                 <button
                   type="button"
                   onClick={() => onDeleteGroup(group.id)}
-                  className="ml-auto rounded p-1 text-zinc-400 transition hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/40 dark:hover:text-rose-400"
+                  disabled={readOnly}
+                  className="ml-auto rounded p-1 text-zinc-400 transition hover:bg-rose-50 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-rose-950/40 dark:hover:text-rose-400"
                   aria-label={`Delete ${group.name}`}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
@@ -287,7 +303,9 @@ export function TableGroupsPanel({
                 type="text"
                 value={group.name}
                 onChange={(event) => onRenameGroup(group.id, event.target.value)}
-                className="mb-2 w-full rounded-md border border-zinc-200 bg-white px-2 py-1 text-sm font-medium text-zinc-900 outline-none ring-sky-500 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+                readOnly={readOnly}
+                disabled={readOnly}
+                className="mb-2 w-full rounded-md border border-zinc-200 bg-white px-2 py-1 text-sm font-medium text-zinc-900 outline-none ring-sky-500 focus:ring-2 read-only:cursor-default read-only:opacity-80 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
               />
 
               <DropZone
@@ -297,6 +315,7 @@ export function TableGroupsPanel({
                 groups={grouping.groups}
                 onDropNode={(nodeId) => onAssignTable(nodeId, group.id)}
                 emptyText="Drop tables here"
+                readOnly={readOnly}
               />
             </div>
           );
@@ -311,6 +330,7 @@ export function TableGroupsPanel({
             onDropNode={onUnassignTable}
             onMoveToGroup={onAssignTable}
             emptyText="All tables are grouped"
+            readOnly={readOnly}
           />
         )}
       </div>

@@ -18,6 +18,7 @@ export type WorkspaceHeaderState = {
   isSaving: boolean;
   saveError: boolean;
   onSave: () => void;
+  readOnly: boolean;
 };
 
 type WorkspaceHeaderContextValue = {
@@ -57,6 +58,7 @@ export function useRegisterWorkspaceHeader({
   isSaving,
   saveError,
   onSave,
+  readOnly,
 }: WorkspaceHeaderState): void {
   const setState = useWorkspaceHeaderRegistration();
   const callbacksRef = useRef({ onProjectNameChange, onSave });
@@ -74,8 +76,9 @@ export function useRegisterWorkspaceHeader({
       isSaving,
       saveError,
       onSave: () => callbacksRef.current.onSave(),
+      readOnly,
     });
-  }, [canvasDirty, isSaving, projectName, projectNameDirty, saveError, setState]);
+  }, [canvasDirty, isSaving, projectName, projectNameDirty, readOnly, saveError, setState]);
 
   useEffect(() => {
     return () => setState(null);

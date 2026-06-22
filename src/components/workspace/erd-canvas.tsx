@@ -16,7 +16,7 @@ import {
   type Viewport,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { Settings2, X } from "lucide-react";
+import { Lock, LockOpen, Settings2, X } from "lucide-react";
 import { DiagramDisplayProvider } from "@/components/workspace/diagram-display-context";
 import { DiagramFocusProvider, useDiagramFocus } from "@/components/workspace/diagram-focus-context";
 import { DiagramToolbar } from "@/components/workspace/diagram-toolbar";
@@ -30,6 +30,30 @@ import type { DiagramGrouping, DiagramSettings, FkEdgeData, TableFlowNode } from
 
 const nodeTypes = { tableNode: TableNode };
 const edgeTypes = { fkEdge: FkEdge };
+
+function WorkspaceLockButton({
+  readOnly,
+  onReadOnlyChange,
+}: {
+  readOnly: boolean;
+  onReadOnlyChange: (readOnly: boolean) => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onReadOnlyChange(!readOnly)}
+      className={`flex h-9 w-9 items-center justify-center rounded-lg border shadow-md transition ${
+        readOnly
+          ? "border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 dark:border-amber-700 dark:bg-amber-950/80 dark:text-amber-200 dark:hover:bg-amber-950"
+          : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+      }`}
+      aria-label={readOnly ? "Unlock workspace" : "Lock workspace"}
+      title={readOnly ? "Unlock workspace" : "Lock workspace (view only)"}
+    >
+      {readOnly ? <Lock className="h-4 w-4" /> : <LockOpen className="h-4 w-4" />}
+    </button>
+  );
+}
 
 function getFkLabel(edge: Edge): string | null {
   const data = edge.data as FkEdgeData | undefined;
@@ -50,6 +74,8 @@ type ErdCanvasProps = {
   fitViewOnGenerate: boolean;
   onFitViewComplete: () => void;
   onOpenSettings: () => void;
+  readOnly: boolean;
+  onReadOnlyChange: (readOnly: boolean) => void;
 };
 
 type ErdCanvasFlowProps = {
@@ -66,6 +92,8 @@ type ErdCanvasFlowProps = {
   onViewportChange: (viewport: Viewport) => void;
   onOpenSettings: () => void;
   onFocusTable: (nodeId: string) => void;
+  readOnly: boolean;
+  onReadOnlyChange: (readOnly: boolean) => void;
   modelOverviewCollapsed: boolean;
   onModelOverviewCollapsedChange: (collapsed: boolean) => void;
 };
@@ -84,6 +112,8 @@ function ErdCanvasFlow({
   onViewportChange,
   onOpenSettings,
   onFocusTable,
+  readOnly,
+  onReadOnlyChange,
   modelOverviewCollapsed,
   onModelOverviewCollapsedChange,
 }: ErdCanvasFlowProps) {
@@ -147,12 +177,16 @@ function ErdCanvasFlow({
       fitView={false}
       panOnScroll
       zoomOnScroll
-      nodesDraggable
+      panOnDrag={readOnly ? true : [1, 2]}
+      nodesDraggable={!readOnly}
       nodesConnectable={false}
       edgesReconnectable={false}
+      deleteKeyCode={readOnly ? null : undefined}
       onlyRenderVisibleElements
       selectNodesOnDrag={false}
+      selectionOnDrag={false}
       autoPanOnNodeDrag={false}
+      className={readOnly ? "cursor-grab active:cursor-grabbing" : undefined}
       minZoom={0.02}
       maxZoom={2.5}
       proOptions={{ hideAttribution: true }}
@@ -221,15 +255,25 @@ function ErdCanvasFlow({
 
       {allNodes.length > 0 && (
         <Panel position="top-right" className="!m-3">
-          <button
-            type="button"
-            onClick={onOpenSettings}
-            className="flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-700 shadow-md transition hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
-            aria-label="Diagram settings"
-            title="Diagram settings"
-          >
-            <Settings2 className="h-4 w-4" />
-          </button>
+          <div className="flex items-center gap-2">
+            <WorkspaceLockButton readOnly={readOnly} onReadOnlyChange={onReadOnlyChange} />
+            <button
+              type="button"
+              onClick={onOpenSettings}
+              disabled={readOnly}
+              className="flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-700 shadow-md transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+              aria-label="Diagram settings"
+              title="Diagram settings"
+            >
+              <Settings2 className="h-4 w-4" />
+            </button>
+          </div>
+        </Panel>
+      )}
+
+      {allNodes.length === 0 && (
+        <Panel position="top-right" className="!m-3">
+          <WorkspaceLockButton readOnly={readOnly} onReadOnlyChange={onReadOnlyChange} />
         </Panel>
       )}
 
@@ -275,6 +319,8 @@ function ErdCanvasInner({
   fitViewOnGenerate,
   onFitViewComplete,
   onOpenSettings,
+  readOnly,
+  onReadOnlyChange,
 }: ErdCanvasProps) {
   const { fitView } = useReactFlow();
   const [searchHighlightId, setSearchHighlightId] = useState<string | null>(null);
@@ -386,6 +432,8 @@ function ErdCanvasInner({
           onViewportChange={onViewportChange}
           onOpenSettings={onOpenSettings}
           onFocusTable={focusTable}
+          readOnly={readOnly}
+          onReadOnlyChange={onReadOnlyChange}
           modelOverviewCollapsed={modelOverviewCollapsed}
           onModelOverviewCollapsedChange={setModelOverviewCollapsed}
         />

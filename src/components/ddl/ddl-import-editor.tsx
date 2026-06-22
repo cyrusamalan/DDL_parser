@@ -26,6 +26,7 @@ type DdlImportEditorProps = {
   sanitizeNotes: string[];
   generateLabel?: string;
   compact?: boolean;
+  readOnly?: boolean;
 };
 
 export function DdlImportEditor({
@@ -37,6 +38,7 @@ export function DdlImportEditor({
   sanitizeNotes,
   generateLabel = "Generate diagram",
   compact = false,
+  readOnly = false,
 }: DdlImportEditorProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -46,6 +48,7 @@ export function DdlImportEditor({
   const displayError = uploadError ?? error;
 
   const handleSqlChange = (value: string) => {
+    if (readOnly) return;
     setUploadError(null);
     setUploadedFileName(null);
     onSqlChange(value);
@@ -53,6 +56,7 @@ export function DdlImportEditor({
 
   const loadFile = useCallback(
     async (file: File) => {
+      if (readOnly) return;
       setUploadError(null);
       const result = await readSqlFile(file);
       if (!result.ok) {
@@ -63,7 +67,7 @@ export function DdlImportEditor({
       setUploadedFileName(result.fileName);
       onSqlChange(result.sql);
     },
-    [onSqlChange],
+    [onSqlChange, readOnly],
   );
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -73,6 +77,7 @@ export function DdlImportEditor({
   };
 
   const handleDrop = async (event: React.DragEvent<HTMLDivElement>) => {
+    if (readOnly) return;
     event.preventDefault();
     setIsDragging(false);
     const file = event.dataTransfer.files[0];
@@ -80,6 +85,7 @@ export function DdlImportEditor({
   };
 
   const handleDragOver = (event: React.DragEvent<HTMLDivElement>) => {
+    if (readOnly) return;
     event.preventDefault();
     setIsDragging(true);
   };
@@ -102,10 +108,12 @@ export function DdlImportEditor({
       />
 
       <div
-        onDrop={handleDrop}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
+        onDrop={readOnly ? undefined : handleDrop}
+        onDragOver={readOnly ? undefined : handleDragOver}
+        onDragLeave={readOnly ? undefined : handleDragLeave}
         className={`relative rounded-2xl border-2 border-dashed transition ${
+          readOnly ? "opacity-60" : ""
+        } ${
           isDragging
             ? "border-sky-400 bg-sky-50/80 dark:border-sky-500 dark:bg-sky-950/40"
             : "border-zinc-300 bg-white dark:border-zinc-700 dark:bg-zinc-900"
@@ -128,7 +136,7 @@ export function DdlImportEditor({
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            disabled={isGenerating}
+            disabled={isGenerating || readOnly}
             className="mt-4 inline-flex items-center gap-2 rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:bg-zinc-800"
           >
             <Upload className="h-4 w-4" />
@@ -149,8 +157,9 @@ export function DdlImportEditor({
       <textarea
         value={sql}
         onChange={(event) => handleSqlChange(event.target.value)}
+        readOnly={readOnly}
         placeholder={SAMPLE_DDL}
-        className={`${textareaMinHeight} w-full resize-none rounded-2xl border border-zinc-300 bg-white p-4 font-mono text-xs leading-6 text-zinc-900 outline-none ring-sky-500 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100`}
+        className={`${textareaMinHeight} w-full resize-none rounded-2xl border border-zinc-300 bg-white p-4 font-mono text-xs leading-6 text-zinc-900 outline-none ring-sky-500 focus:ring-2 read-only:cursor-default read-only:opacity-80 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100`}
         spellCheck={false}
       />
 
@@ -160,7 +169,8 @@ export function DdlImportEditor({
           <button
             type="button"
             onClick={() => handleSqlChange(SAMPLE_DDL)}
-            className="font-medium text-sky-700 underline-offset-2 hover:underline dark:text-sky-400"
+            disabled={readOnly}
+            className="font-medium text-sky-700 underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:opacity-50 dark:text-sky-400"
           >
             Load sample schema
           </button>
@@ -194,7 +204,7 @@ export function DdlImportEditor({
           setUploadError(null);
           onGenerate();
         }}
-        disabled={isGenerating || !sql.trim()}
+        disabled={isGenerating || !sql.trim() || readOnly}
         className={`inline-flex w-full items-center justify-center gap-2 rounded-xl bg-zinc-900 font-medium text-white shadow-sm transition hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300 ${
           compact ? "px-4 py-2.5 text-sm" : "px-5 py-3 text-sm"
         }`}

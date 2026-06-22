@@ -12,6 +12,7 @@ type SqlImportPanelProps = {
   sanitizeNotes: string[];
   collapsed: boolean;
   onToggleCollapsed: () => void;
+  readOnly?: boolean;
 };
 
 export function SqlImportPanel({
@@ -23,6 +24,7 @@ export function SqlImportPanel({
   sanitizeNotes,
   collapsed,
   onToggleCollapsed,
+  readOnly = false,
 }: SqlImportPanelProps) {
   if (collapsed) {
     return (
@@ -68,6 +70,7 @@ export function SqlImportPanel({
           sanitizeNotes={sanitizeNotes}
           generateLabel="Regenerate"
           compact
+          readOnly={readOnly}
         />
       </div>
     </aside>
