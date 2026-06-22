@@ -25,6 +25,12 @@ import { FkEdge } from "@/components/workspace/fk-edge";
 import { SchemaInfoPanel } from "@/components/workspace/schema-info-panel";
 import { TableNode } from "@/components/workspace/table-node";
 import { DEFAULT_EDGE_COLOR, DEFAULT_EDGE_STYLE } from "@/lib/ddl/edge-styles";
+import {
+  groupFocusLabel,
+  maxZoomForGroupFocus,
+  nodeIdsForGroupFocus,
+  type GroupFocusId,
+} from "@/lib/ddl/group-focus";
 import { getIsolatedTableIds } from "@/lib/ddl/isolated-tables";
 import type { DiagramGrouping, DiagramSettings, FkEdgeData, TableFlowNode } from "@/lib/types/diagram";
 
@@ -92,6 +98,11 @@ type ErdCanvasFlowProps = {
   onViewportChange: (viewport: Viewport) => void;
   onOpenSettings: () => void;
   onFocusTable: (nodeId: string) => void;
+  onFocusGroup: (groupId: GroupFocusId) => void;
+  onClearGroupFocus: () => void;
+  onClearGroupFocusOnly: () => void;
+  focusedGroupId: GroupFocusId | null;
+  focusedGroupLabel: string | null;
   readOnly: boolean;
   onReadOnlyChange: (readOnly: boolean) => void;
   modelOverviewCollapsed: boolean;
@@ -112,6 +123,11 @@ function ErdCanvasFlow({
   onViewportChange,
   onOpenSettings,
   onFocusTable,
+  onFocusGroup,
+  onClearGroupFocus,
+  onClearGroupFocusOnly,
+  focusedGroupId,
+  focusedGroupLabel,
   readOnly,
   onReadOnlyChange,
   modelOverviewCollapsed,
@@ -139,15 +155,17 @@ function ErdCanvasFlow({
 
   const handleNodeClick = useCallback(
     (_event: MouseEvent, node: TableFlowNode) => {
+      onClearGroupFocusOnly();
       onFocusChange(focusedNodeId === node.id ? null : node.id);
     },
-    [focusedNodeId, onFocusChange],
+    [focusedNodeId, onClearGroupFocusOnly, onFocusChange],
   );
 
   const handlePaneClick = useCallback(() => {
     onFocusChange(null);
+    onClearGroupFocus();
     setHoveredEdgeId(null);
-  }, [onFocusChange, setHoveredEdgeId]);
+  }, [onClearGroupFocus, onFocusChange, setHoveredEdgeId]);
 
   const handleEdgeMouseEnter: EdgeMouseHandler = useCallback(
     (_event, edge) => {
@@ -207,7 +225,32 @@ function ErdCanvasFlow({
 
       {allNodes.length > 0 && (
         <Panel position="top-left" className="!m-3 max-w-md">
-          <DiagramToolbar nodes={allNodes} onSearchSelect={onFocusTable} />
+          <DiagramToolbar
+            nodes={allNodes}
+            grouping={grouping}
+            activeGroupId={focusedGroupId}
+            onSearchSelect={onFocusTable}
+            onSelectGroup={onFocusGroup}
+            onShowAll={onClearGroupFocus}
+          />
+        </Panel>
+      )}
+
+      {focusedGroupLabel && !focusedTableName && (
+        <Panel position="bottom-right" className="!m-3 !mb-[9.5rem]">
+          <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50/95 px-3 py-2 text-xs text-amber-900 shadow-md backdrop-blur dark:border-amber-800 dark:bg-amber-950/90 dark:text-amber-100">
+            <span>
+              Viewing <strong>{focusedGroupLabel}</strong> — click canvas to clear
+            </span>
+            <button
+              type="button"
+              onClick={onClearGroupFocus}
+              className="rounded p-0.5 text-amber-700 transition hover:bg-amber-200/60 dark:text-amber-300 dark:hover:bg-amber-800/60"
+              aria-label="Clear group focus"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
         </Panel>
       )}
 
@@ -321,6 +364,7 @@ function ErdCanvasInner({
 }: ErdCanvasProps) {
   const { fitView } = useReactFlow();
   const [searchHighlightId, setSearchHighlightId] = useState<string | null>(null);
+  const [focusedGroupId, setFocusedGroupId] = useState<GroupFocusId | null>(null);
   const [modelOverviewCollapsed, setModelOverviewCollapsed] = useState(true);
 
   const isolatedIds = useMemo(
@@ -349,6 +393,68 @@ function ErdCanvasInner({
     void fitView({ padding: 0.12, minZoom: 0.02, maxZoom: 1, duration: 300 });
   }, [fitView]);
 
+  const allNodeIds = useMemo(() => nodes.map((node) => node.id), [nodes]);
+
+  const fitGroupFocus = useCallback(
+    (groupId: GroupFocusId) => {
+      const ids = nodeIdsForGroupFocus(groupId, grouping, allNodeIds).filter((id) =>
+        visibleNodeIds.has(id),
+      );
+      if (ids.length === 0) return;
+
+      void fitView({
+        nodes: ids.map((id) => ({ id })),
+        padding: 0.25,
+        duration: 400,
+        maxZoom: maxZoomForGroupFocus(ids.length),
+      });
+    },
+    [allNodeIds, fitView, grouping, visibleNodeIds],
+  );
+
+  const focusedGroupLabel = useMemo(() => {
+    if (!focusedGroupId) return null;
+    const ids = nodeIdsForGroupFocus(focusedGroupId, grouping, allNodeIds).filter((id) =>
+      visibleNodeIds.has(id),
+    );
+    if (ids.length === 0) return null;
+    return groupFocusLabel(focusedGroupId, grouping, ids.length);
+  }, [allNodeIds, focusedGroupId, grouping, visibleNodeIds]);
+
+  const clearGroupFocusOnly = useCallback(() => {
+    setFocusedGroupId(null);
+  }, []);
+
+  const clearGroupFocus = useCallback(() => {
+    let shouldFit = false;
+    setFocusedGroupId((current) => {
+      shouldFit = current !== null;
+      return null;
+    });
+    if (shouldFit) {
+      requestAnimationFrame(() => {
+        fitDiagram();
+      });
+    }
+  }, [fitDiagram]);
+
+  const focusGroup = useCallback(
+    (groupId: GroupFocusId) => {
+      const ids = nodeIdsForGroupFocus(groupId, grouping, allNodeIds).filter((id) =>
+        visibleNodeIds.has(id),
+      );
+      if (ids.length === 0) return;
+
+      onFocusChange(null);
+      setSearchHighlightId(null);
+      setFocusedGroupId(groupId);
+      requestAnimationFrame(() => {
+        fitGroupFocus(groupId);
+      });
+    },
+    [allNodeIds, fitGroupFocus, grouping, onFocusChange, visibleNodeIds],
+  );
+
   const hasInitialFitRef = useRef(false);
 
   useEffect(() => {
@@ -374,7 +480,11 @@ function ErdCanvasInner({
     let innerFrame = 0;
     const outerFrame = requestAnimationFrame(() => {
       innerFrame = requestAnimationFrame(() => {
-        fitDiagram();
+        if (focusedGroupId) {
+          fitGroupFocus(focusedGroupId);
+        } else {
+          fitDiagram();
+        }
         onFitViewComplete();
       });
     });
@@ -383,7 +493,7 @@ function ErdCanvasInner({
       cancelAnimationFrame(outerFrame);
       cancelAnimationFrame(innerFrame);
     };
-  }, [baseNodes.length, fitDiagram, fitViewOnGenerate, onFitViewComplete]);
+  }, [baseNodes.length, fitDiagram, fitGroupFocus, fitViewOnGenerate, focusedGroupId, onFitViewComplete]);
 
   useEffect(() => {
     if (!searchHighlightId) return;
@@ -396,6 +506,7 @@ function ErdCanvasInner({
       const node = nodes.find((item) => item.id === nodeId);
       if (!node) return;
 
+      setFocusedGroupId(null);
       onFocusChange(nodeId);
       setSearchHighlightId(nodeId);
       void fitView({
@@ -412,6 +523,9 @@ function ErdCanvasInner({
     <DiagramDisplayProvider columnView={diagramSettings.columnView} grouping={grouping}>
       <DiagramFocusProvider
         focusedNodeId={focusedNodeId}
+        focusedGroupId={focusedGroupId}
+        grouping={grouping}
+        allNodeIds={allNodeIds}
         searchHighlightId={searchHighlightId}
         edges={baseEdges}
       >
@@ -429,6 +543,11 @@ function ErdCanvasInner({
           onViewportChange={onViewportChange}
           onOpenSettings={onOpenSettings}
           onFocusTable={focusTable}
+          onFocusGroup={focusGroup}
+          onClearGroupFocus={clearGroupFocus}
+          onClearGroupFocusOnly={clearGroupFocusOnly}
+          focusedGroupId={focusedGroupId}
+          focusedGroupLabel={focusedGroupLabel}
           readOnly={readOnly}
           onReadOnlyChange={onReadOnlyChange}
           modelOverviewCollapsed={modelOverviewCollapsed}
