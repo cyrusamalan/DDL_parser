@@ -133,15 +133,16 @@ export function WorkspaceClient({ diagram }: WorkspaceClientProps) {
     isSaving,
     saveError,
     onSave,
-    readOnly: isLocked,
   });
 
   const onNodesChange = useCallback(
     (changes: NodeChange<TableFlowNode>[]) => {
       if (isLocked) {
-        const selectionOnly = changes.filter((change) => change.type === "select");
-        if (selectionOnly.length === 0) return;
-        setNodes((current) => applyNodeChanges(selectionOnly, current));
+        const allowed = changes.filter(
+          (change) => change.type === "select" || change.type === "dimensions",
+        );
+        if (allowed.length === 0) return;
+        setNodes((current) => applyNodeChanges(allowed, current));
         return;
       }
 
@@ -155,11 +156,10 @@ export function WorkspaceClient({ diagram }: WorkspaceClientProps) {
 
   const onEdgesChange = useCallback(
     (changes: EdgeChange[]) => {
-      if (isLocked) return;
       setEdges((current) => applyEdgeChanges(changes, current));
       bumpCanvasRevision();
     },
-    [bumpCanvasRevision, isLocked],
+    [bumpCanvasRevision],
   );
 
   const onNodeDragStop = useCallback(() => {
@@ -178,58 +178,51 @@ export function WorkspaceClient({ diagram }: WorkspaceClientProps) {
   }, []);
 
   const handleCreateGroup = useCallback(() => {
-    if (isLocked) return;
     setGrouping((current) => createGroup(current));
     bumpCanvasRevision();
-  }, [bumpCanvasRevision, isLocked]);
+  }, [bumpCanvasRevision]);
 
   const handleRenameGroup = useCallback(
     (groupId: string, name: string) => {
-      if (isLocked) return;
       setGrouping((current) => renameGroup(current, groupId, name));
       bumpCanvasRevision();
     },
-    [bumpCanvasRevision, isLocked],
+    [bumpCanvasRevision],
   );
 
   const handleSetGroupColor = useCallback(
     (groupId: string, color: TableGroupColor) => {
-      if (isLocked) return;
       setGrouping((current) => setGroupColor(current, groupId, color));
       bumpCanvasRevision();
     },
-    [bumpCanvasRevision, isLocked],
+    [bumpCanvasRevision],
   );
 
   const handleDeleteGroup = useCallback(
     (groupId: string) => {
-      if (isLocked) return;
       setGrouping((current) => deleteGroup(current, groupId));
       bumpCanvasRevision();
     },
-    [bumpCanvasRevision, isLocked],
+    [bumpCanvasRevision],
   );
 
   const handleAssignTable = useCallback(
     (nodeId: string, groupId: string) => {
-      if (isLocked) return;
       setGrouping((current) => assignTable(current, nodeId, groupId));
       bumpCanvasRevision();
     },
-    [bumpCanvasRevision, isLocked],
+    [bumpCanvasRevision],
   );
 
   const handleUnassignTable = useCallback(
     (nodeId: string) => {
-      if (isLocked) return;
       setGrouping((current) => unassignTable(current, nodeId));
       bumpCanvasRevision();
     },
-    [bumpCanvasRevision, isLocked],
+    [bumpCanvasRevision],
   );
 
   const handleAutoGroupRequest = useCallback(async () => {
-    if (isLocked) return;
     setAutoGroupError(null);
     setIsAutoGrouping(true);
     try {
@@ -245,10 +238,9 @@ export function WorkspaceClient({ diagram }: WorkspaceClientProps) {
     } finally {
       setIsAutoGrouping(false);
     }
-  }, [edges, isLocked, nodes]);
+  }, [edges, nodes]);
 
   const handleApplyAiGrouping = useCallback(async () => {
-    if (isLocked) return;
     if (!aiPreview) return;
     const nextGrouping = aiPreview.grouping;
     setGrouping(nextGrouping);
@@ -273,7 +265,7 @@ export function WorkspaceClient({ diagram }: WorkspaceClientProps) {
     } finally {
       setIsLayouting(false);
     }
-  }, [aiPreview, bumpCanvasRevision, diagramSettings, edges, isLocked, nodes]);
+  }, [aiPreview, bumpCanvasRevision, diagramSettings, edges, nodes]);
 
   const handleCloseAiPreview = useCallback(() => {
     setAiPreviewOpen(false);
@@ -282,7 +274,6 @@ export function WorkspaceClient({ diagram }: WorkspaceClientProps) {
 
   const handleGenerate = useCallback(
     (sqlOverride?: string) => {
-      if (isLocked) return;
       startGenerateTransition(async () => {
         setParseError(null);
         setSanitizeNotes([]);
@@ -309,11 +300,10 @@ export function WorkspaceClient({ diagram }: WorkspaceClientProps) {
         }
       });
     },
-    [bumpCanvasRevision, diagramSettings, isLocked, sql],
+    [bumpCanvasRevision, diagramSettings, sql],
   );
 
   const handleApplyLayout = useCallback(async () => {
-    if (isLocked) return;
     setIsLayouting(true);
     try {
       const { nodes: nextNodes, edges: nextEdges } = await relayoutNodes(
@@ -333,24 +323,22 @@ export function WorkspaceClient({ diagram }: WorkspaceClientProps) {
     } finally {
       setIsLayouting(false);
     }
-  }, [bumpCanvasRevision, diagramSettings, edges, grouping, isLocked, nodes]);
+  }, [bumpCanvasRevision, diagramSettings, edges, grouping, nodes]);
 
   const handleSqlChange = useCallback(
     (value: string) => {
-      if (isLocked) return;
       setSql(value);
       bumpCanvasRevision();
     },
-    [bumpCanvasRevision, isLocked],
+    [bumpCanvasRevision],
   );
 
   const handleSettingsChange = useCallback(
     (nextSettings: DiagramSettings) => {
-      if (isLocked) return;
       setDiagramSettings(nextSettings);
       bumpCanvasRevision();
     },
-    [bumpCanvasRevision, isLocked],
+    [bumpCanvasRevision],
   );
 
   return (
@@ -365,7 +353,6 @@ export function WorkspaceClient({ diagram }: WorkspaceClientProps) {
           sanitizeNotes={sanitizeNotes}
           collapsed={sidebarCollapsed}
           onToggleCollapsed={() => setSidebarCollapsed((value) => !value)}
-          readOnly={isLocked}
         />
         <main className="relative min-w-0 flex-1 bg-zinc-100 dark:bg-zinc-950">
           <ErdCanvas
@@ -400,7 +387,6 @@ export function WorkspaceClient({ diagram }: WorkspaceClientProps) {
           isAutoGrouping={isAutoGrouping}
           autoGroupError={autoGroupError}
           onAutoGroupRequest={() => void handleAutoGroupRequest()}
-          readOnly={isLocked}
         />
       </div>
 

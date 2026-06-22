@@ -47,8 +47,8 @@ function WorkspaceLockButton({
           ? "border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 dark:border-amber-700 dark:bg-amber-950/80 dark:text-amber-200 dark:hover:bg-amber-950"
           : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
       }`}
-      aria-label={readOnly ? "Unlock workspace" : "Lock workspace"}
-      title={readOnly ? "Unlock workspace" : "Lock workspace (view only)"}
+      aria-label={readOnly ? "Unlock table positions" : "Lock table positions"}
+      title={readOnly ? "Unlock table positions" : "Lock table positions (pan canvas only)"}
     >
       {readOnly ? <Lock className="h-4 w-4" /> : <LockOpen className="h-4 w-4" />}
     </button>
@@ -177,14 +177,12 @@ function ErdCanvasFlow({
       fitView={false}
       panOnScroll
       zoomOnScroll
-      panOnDrag={readOnly ? true : [1, 2]}
-      nodesDraggable={!readOnly}
+      {...(readOnly ? { panOnDrag: true, nodesDraggable: false } : { nodesDraggable: true })}
       nodesConnectable={false}
       edgesReconnectable={false}
-      deleteKeyCode={readOnly ? null : undefined}
+      {...(readOnly ? { deleteKeyCode: null } : {})}
       onlyRenderVisibleElements
       selectNodesOnDrag={false}
-      selectionOnDrag={false}
       autoPanOnNodeDrag={false}
       className={readOnly ? "cursor-grab active:cursor-grabbing" : undefined}
       minZoom={0.02}
@@ -260,8 +258,7 @@ function ErdCanvasFlow({
             <button
               type="button"
               onClick={onOpenSettings}
-              disabled={readOnly}
-              className="flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-700 shadow-md transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+              className="flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-700 shadow-md transition hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
               aria-label="Diagram settings"
               title="Diagram settings"
             >

@@ -47,12 +47,10 @@ export function AppHeader() {
               <input
                 value={workspaceHeader.projectName}
                 onChange={(event) => workspaceHeader.onProjectNameChange(event.target.value)}
-                readOnly={workspaceHeader.readOnly}
-                disabled={workspaceHeader.readOnly}
-                className="min-w-0 max-w-md truncate rounded-lg border border-transparent bg-transparent px-3 py-1.5 text-center text-sm font-semibold text-zinc-900 outline-none ring-sky-500 transition focus:border-zinc-300 focus:bg-white focus:ring-2 disabled:cursor-default disabled:opacity-80 dark:text-zinc-100 dark:focus:border-zinc-700 dark:focus:bg-zinc-950"
+                className="min-w-0 max-w-md truncate rounded-lg border border-transparent bg-transparent px-3 py-1.5 text-center text-sm font-semibold text-zinc-900 outline-none ring-sky-500 transition focus:border-zinc-300 focus:bg-white focus:ring-2 dark:text-zinc-100 dark:focus:border-zinc-700 dark:focus:bg-zinc-950"
                 aria-label="Project name"
               />
-              {workspaceHeader.projectNameDirty && !workspaceHeader.readOnly && (
+              {workspaceHeader.projectNameDirty && (
                 <SaveButton
                   onClick={workspaceHeader.onSave}
                   disabled={workspaceHeader.isSaving}
@@ -88,7 +86,7 @@ export function AppHeader() {
         className="fixed right-0 top-0 z-50 flex items-center gap-2 pr-3 sm:pr-4"
         style={headerHeightStyle}
       >
-        {isWorkspace && workspaceHeader?.canvasDirty && !workspaceHeader.readOnly && (
+        {isWorkspace && workspaceHeader?.canvasDirty && (
           <SaveButton
             onClick={workspaceHeader.onSave}
             disabled={workspaceHeader.isSaving}
