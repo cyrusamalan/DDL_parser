@@ -20,7 +20,7 @@ export default async function HomePage() {
       <HeroAnimation />
 
       {/* Left-side darkening so the copy stays legible over the animation. */}
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-black/90 via-black/55 to-transparent" />
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-black via-black/75 to-transparent" />
 
       {/* Hero copy (kept to the left). */}
       <div className="relative z-10 flex w-full flex-col px-6 py-16 sm:px-10 lg:px-16 xl:px-24">

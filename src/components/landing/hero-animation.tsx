@@ -8,16 +8,21 @@ import {
   tokenizeSql,
 } from "@/lib/landing/highlight-sql";
 
-type Stage = "grid" | "zoom" | "type" | "settle" | "erd";
+type Stage = "grid" | "zoom" | "type" | "settle" | "erd" | "expand";
 
-/** One full cycle ≈ 14.7s. Durations are how long each stage is held. */
+/** One full cycle ≈ 18s. Durations are how long each stage is held. */
 const SEQUENCE: { stage: Stage; duration: number }[] = [
   { stage: "grid", duration: 2000 },
   { stage: "zoom", duration: 1400 },
   { stage: "type", duration: 5200 },
   { stage: "settle", duration: 1900 },
-  { stage: "erd", duration: 4200 },
+  { stage: "erd", duration: 3000 },
+  { stage: "expand", duration: 7200 },
 ];
+
+/** Sub-timing within the `expand` stage (ms from stage start). */
+const EXPAND_ZOOM_MS = 1500; // camera finishes pulling back
+const EXPAND_LINES_MS = 1700; // lines finish drawing → tables pop in
 
 const GRID_STAGE: Record<Stage, string> = {
   grid: "scale-100 opacity-60",
@@ -25,6 +30,7 @@ const GRID_STAGE: Record<Stage, string> = {
   type: "scale-[2.1] opacity-20",
   settle: "scale-125 opacity-30",
   erd: "scale-110 opacity-45",
+  expand: "scale-100 opacity-25",
 };
 
 const SQL_STAGE: Record<Stage, string> = {
@@ -33,6 +39,7 @@ const SQL_STAGE: Record<Stage, string> = {
   type: "opacity-100 scale-100 translate-y-0",
   settle: "opacity-0 scale-90 -translate-y-3 blur-sm",
   erd: "opacity-0 scale-90",
+  expand: "opacity-0 scale-90",
 };
 
 const ERD_STAGE: Record<Stage, string> = {
@@ -41,6 +48,18 @@ const ERD_STAGE: Record<Stage, string> = {
   type: "opacity-100",
   settle: "opacity-100",
   erd: "opacity-100",
+  expand: "opacity-100",
+};
+
+/** Camera zoom: tight on the core cluster, then pulled all the way back. */
+const FOCUS = "scale(1.35)";
+const CAMERA: Record<Stage, string> = {
+  grid: FOCUS,
+  zoom: FOCUS,
+  type: FOCUS,
+  settle: FOCUS,
+  erd: FOCUS,
+  expand: "scale(1)",
 };
 
 interface MiniColumn {
@@ -126,10 +145,129 @@ const EDGES: EdgeDef[] = [
   { d: "M 230 320 C 150 320, 120 280, 120 235", delay: 450 },
 ];
 
+/**
+ * Big canvas: the original 640×440 core stage is centred inside it, and a dense
+ * outer ring of tables fills the rest — revealed when the camera zooms out.
+ */
+const BIG_W = 1820;
+const BIG_H = 1160;
+const CORE_W = 640;
+const CORE_H = 440;
+const CORE_OFFSET = {
+  x: (BIG_W - CORE_W) / 2, // 780 — core sits dead-centre
+  y: (BIG_H - CORE_H) / 2, // 430
+} as const;
+
+const CARD_W = 200;
+/** Approximate rendered card height for edge anchoring (header + rows). */
+const cardHeight = (cols: number) => 38 + cols * 40;
+
+interface Rect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/**
+ * Orthogonal (right-angle) connector between two cards, ERD-tool style: exit the
+ * side of `a` that faces `b`, run to a vertical channel between them, drop to the
+ * target row, then enter `b`. Produces the stepped H-V-H lines of a real ERD.
+ */
+function edgeBetween(a: Rect, b: Rect): string {
+  const ay = Math.round(a.y + a.h / 2);
+  const by = Math.round(b.y + b.h / 2);
+  const exitRight = b.x + b.w / 2 >= a.x + a.w / 2;
+  const sx = exitRight ? a.x + a.w : a.x;
+  const tx = exitRight ? b.x : b.x + b.w;
+  const stub = 26;
+  const midX = exitRight
+    ? Math.round(Math.max((sx + tx) / 2, sx + stub))
+    : Math.round(Math.min((sx + tx) / 2, sx - stub));
+  return `M ${Math.round(sx)} ${ay} H ${midX} V ${by} H ${Math.round(tx)}`;
+}
+
+/** Core card rects in big-canvas coords (core-local coords + CORE_OFFSET). */
+const CORE_RECTS: Record<string, Rect> = {
+  users: { x: CORE_OFFSET.x + 20, y: CORE_OFFSET.y + 70, w: CARD_W, h: cardHeight(4) },
+  posts: { x: CORE_OFFSET.x + 400, y: CORE_OFFSET.y + 40, w: CARD_W, h: cardHeight(4) },
+  comments: { x: CORE_OFFSET.x + 220, y: CORE_OFFSET.y + 300, w: CARD_W, h: cardHeight(4) },
+};
+
+/** An outer table: a card plus every table it points to (one FK edge each). */
+interface OuterDef extends CardDef {
+  refs?: string[];
+}
+
+const NO_SCATTER = "scale(0.8)";
+
+/**
+ * A simple OLTP-ish schema around the core. Tables are laid out on a centred
+ * ellipse around the core (see below) rather than hugging the screen edges; the
+ * FK connections are mostly decorative.
+ */
+const RING_BASE: Omit<OuterDef, "left" | "top">[] = [
+  { name: "tags", refs: [], scatter: NO_SCATTER, appearAt: 0, floatDur: "8.5s", floatDelay: "0.2s", columns: [{ name: "id", type: "uuid", pk: true }, { name: "name", type: "text" }, { name: "slug", type: "text" }] },
+  { name: "post_tags", refs: ["posts", "tags"], scatter: NO_SCATTER, appearAt: 0, floatDur: "8s", floatDelay: "0.5s", columns: [{ name: "post_id", type: "uuid", pk: true, fk: true }, { name: "tag_id", type: "uuid", pk: true, fk: true }] },
+  { name: "categories", refs: [], scatter: NO_SCATTER, appearAt: 0, floatDur: "9s", floatDelay: "0.3s", columns: [{ name: "id", type: "uuid", pk: true }, { name: "name", type: "text" }, { name: "slug", type: "text" }] },
+  { name: "teams", refs: ["users"], scatter: NO_SCATTER, appearAt: 0, floatDur: "8.5s", floatDelay: "0.6s", columns: [{ name: "id", type: "uuid", pk: true }, { name: "owner_id", type: "uuid", fk: true }, { name: "name", type: "text" }] },
+  { name: "projects", refs: ["teams", "users"], scatter: NO_SCATTER, appearAt: 0, floatDur: "9s", floatDelay: "0.4s", columns: [{ name: "id", type: "uuid", pk: true }, { name: "team_id", type: "uuid", fk: true }, { name: "lead_id", type: "uuid", fk: true }] },
+  { name: "tasks", refs: ["projects", "users"], scatter: NO_SCATTER, appearAt: 0, floatDur: "8s", floatDelay: "0.7s", columns: [{ name: "id", type: "uuid", pk: true }, { name: "project_id", type: "uuid", fk: true }, { name: "assignee_id", type: "uuid", fk: true }] },
+  { name: "notifications", refs: ["users", "comments"], scatter: NO_SCATTER, appearAt: 0, floatDur: "9s", floatDelay: "0.5s", columns: [{ name: "id", type: "uuid", pk: true }, { name: "user_id", type: "uuid", fk: true }, { name: "comment_id", type: "uuid", fk: true }] },
+  { name: "likes", refs: ["users", "posts"], scatter: NO_SCATTER, appearAt: 0, floatDur: "8.5s", floatDelay: "0.9s", columns: [{ name: "user_id", type: "uuid", pk: true, fk: true }, { name: "post_id", type: "uuid", pk: true, fk: true }] },
+  { name: "bookmarks", refs: ["users", "posts"], scatter: NO_SCATTER, appearAt: 0, floatDur: "8s", floatDelay: "0.3s", columns: [{ name: "user_id", type: "uuid", pk: true, fk: true }, { name: "post_id", type: "uuid", pk: true, fk: true }] },
+  { name: "reactions", refs: ["comments", "users"], scatter: NO_SCATTER, appearAt: 0, floatDur: "9s", floatDelay: "0.6s", columns: [{ name: "id", type: "uuid", pk: true }, { name: "comment_id", type: "uuid", fk: true }, { name: "user_id", type: "uuid", fk: true }] },
+  { name: "follows", refs: ["users"], scatter: NO_SCATTER, appearAt: 0, floatDur: "8.5s", floatDelay: "0.4s", columns: [{ name: "follower_id", type: "uuid", pk: true, fk: true }, { name: "followee_id", type: "uuid", pk: true, fk: true }] },
+  { name: "sessions", refs: ["users"], scatter: NO_SCATTER, appearAt: 0, floatDur: "9s", floatDelay: "0.8s", columns: [{ name: "id", type: "uuid", pk: true }, { name: "user_id", type: "uuid", fk: true }, { name: "expires_at", type: "timestamptz" }] },
+  { name: "profiles", refs: ["users"], scatter: NO_SCATTER, appearAt: 0, floatDur: "8s", floatDelay: "0.2s", columns: [{ name: "user_id", type: "uuid", pk: true, fk: true }, { name: "bio", type: "text" }, { name: "avatar_url", type: "text" }] },
+  { name: "media", refs: ["posts", "users"], scatter: NO_SCATTER, appearAt: 0, floatDur: "9s", floatDelay: "0.7s", columns: [{ name: "id", type: "uuid", pk: true }, { name: "post_id", type: "uuid", fk: true }, { name: "uploader_id", type: "uuid", fk: true }] },
+];
+
+// Centred ellipse around the core — keeps tables off the screen edges.
+const RING_CX = BIG_W / 2;
+const RING_CY = BIG_H / 2;
+const RING_RX = 630;
+const RING_RY = 420;
+
+const EXTRA_CARDS: OuterDef[] = RING_BASE.map((card, i) => {
+  const angle = (i / RING_BASE.length) * Math.PI * 2 - Math.PI / 2;
+  const h = cardHeight(card.columns.length);
+  return {
+    ...card,
+    left: Math.round(RING_CX + Math.cos(angle) * RING_RX - CARD_W / 2),
+    top: Math.round(RING_CY + Math.sin(angle) * RING_RY - h / 2),
+  };
+});
+
+const OUTER_RECTS: Record<string, Rect> = Object.fromEntries(
+  EXTRA_CARDS.map((card) => [
+    card.name,
+    { x: card.left, y: card.top, w: CARD_W, h: cardHeight(card.columns.length) },
+  ]),
+);
+
+const ALL_RECTS: Record<string, Rect> = { ...CORE_RECTS, ...OUTER_RECTS };
+
+/**
+ * One edge per (table → referenced table). Drawn from the referenced table
+ * *outward* to the new table, so during the zoom-out the lines grow across the
+ * schema and the tables form at their ends. Many tables have 2 FKs → a web.
+ */
+const EXTRA_EDGES: EdgeDef[] = EXTRA_CARDS.flatMap((card, i) =>
+  (card.refs ?? [])
+    .filter((ref) => ALL_RECTS[ref])
+    .map((ref, j) => ({
+      d: edgeBetween(ALL_RECTS[ref], OUTER_RECTS[card.name]),
+      delay: i * 45 + j * 90,
+      highlight: (i + j) % 5 === 0,
+    })),
+);
+
 export function HeroAnimation() {
   const [index, setIndex] = useState(0);
-  const [loopKey, setLoopKey] = useState(0);
   const [typeProgress, setTypeProgress] = useState(0);
+  // 0 = none, 1 = zoomed out (draw lines), 2 = lines done (tables form).
+  const [expandStep, setExpandStep] = useState(0);
   const [active, setActive] = useState(true);
   const [reduced, setReduced] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -167,22 +305,29 @@ export function HeroAnimation() {
     };
   }, []);
 
-  // Advance through the sequence; pausing simply stops scheduling the next step.
+  // Advance through the sequence once, then hold on the final web diagram.
   useEffect(() => {
     if (reduced || !active) return;
-    const timer = setTimeout(() => {
-      const next = (index + 1) % SEQUENCE.length;
-      // Looping back to the grid: restart the draw/pulse and clear typed code.
-      if (next === 0) {
-        setLoopKey((key) => key + 1);
-        setTypeProgress(0);
-      }
-      setIndex(next);
-    }, SEQUENCE[index].duration);
+    if (index >= SEQUENCE.length - 1) return; // last stage: stay until reload
+    const timer = setTimeout(() => setIndex(index + 1), SEQUENCE[index].duration);
     return () => clearTimeout(timer);
   }, [index, active, reduced]);
 
   const stage: Stage = reduced ? "erd" : SEQUENCE[index].stage;
+
+  // Sequence the expand stage: zoom out first, then draw lines, then form tables.
+  useEffect(() => {
+    if (stage !== "expand" || reduced || !active) return;
+    const toLines = setTimeout(() => setExpandStep(1), EXPAND_ZOOM_MS);
+    const toTables = setTimeout(
+      () => setExpandStep(2),
+      EXPAND_ZOOM_MS + EXPAND_LINES_MS,
+    );
+    return () => {
+      clearTimeout(toLines);
+      clearTimeout(toTables);
+    };
+  }, [stage, reduced, active]);
 
   // Drive the typewriter while in the "type" stage (reset to 0 happens on loop).
   useEffect(() => {
@@ -283,16 +428,18 @@ export function HeroAnimation() {
         />
       </div>
 
-      {/* The resulting ER diagram (nudged right of centre). */}
+      {/* The resulting ER diagram: nudged right while focused, full-bleed on expand. */}
       <div
-        className={`absolute inset-0 flex items-center justify-center transition-opacity duration-[900ms] ease-in-out md:pl-[18%] lg:pl-[26%] ${ERD_STAGE[stage]}`}
+        className={`absolute inset-0 flex items-center justify-center transition-[opacity,padding] duration-[1300ms] ease-in-out ${
+          stage === "expand" ? "" : "md:pl-[18%] lg:pl-[26%]"
+        } ${ERD_STAGE[stage]}`}
         style={{ perspective: 1000 }}
       >
         <DemoErd
-          loopKey={loopKey}
           stage={stage}
           settled={settled}
           typeProgress={typeProgress}
+          expandStep={expandStep}
           reduced={reduced}
         />
       </div>
@@ -333,20 +480,27 @@ function SqlPanel({ typed, showCaret }: { typed: string; showCaret: boolean }) {
 function MiniCard({
   card,
   revealed,
-  settled,
+  placed,
+  revealMs = 1200,
+  rowMs = 500,
+  rowStagger = 80,
 }: {
   card: CardDef;
   revealed: boolean;
-  settled: boolean;
+  placed: boolean;
+  revealMs?: number;
+  rowMs?: number;
+  rowStagger?: number;
 }) {
   return (
     <div className="absolute" style={{ left: card.left, top: card.top }}>
       {/* Settle layer: glides from scattered position into place. */}
       <div
-        className="transition-all duration-[1200ms] ease-out"
+        className="ease-out"
         style={{
           opacity: revealed ? 1 : 0,
-          transform: settled ? "none" : card.scatter,
+          transform: placed ? "none" : card.scatter,
+          transition: `opacity ${revealMs}ms ease-out, transform ${revealMs}ms ease-out`,
         }}
       >
         {/* Float layer: gentle idle bob (independent transform). */}
@@ -368,7 +522,7 @@ function MiniCard({
             {card.columns.map((column, i) => (
               <li
                 key={column.name}
-                className={`flex items-center justify-between gap-2 px-3 py-1.5 text-xs transition-all duration-500 ${
+                className={`flex items-center justify-between gap-2 px-3 py-1.5 text-xs transition-all ${
                   revealed ? "translate-x-0 opacity-100" : "-translate-x-2 opacity-0"
                 } ${
                   column.pk
@@ -377,7 +531,10 @@ function MiniCard({
                       ? "bg-sky-50/80"
                       : "bg-white"
                 }`}
-                style={{ transitionDelay: revealed ? `${i * 80}ms` : "0ms" }}
+                style={{
+                  transitionDuration: `${rowMs}ms`,
+                  transitionDelay: revealed ? `${i * rowStagger}ms` : "0ms",
+                }}
               >
                 <div className="min-w-0">
                   <p className="truncate font-medium text-zinc-800">{column.name}</p>
@@ -396,21 +553,100 @@ function MiniCard({
   );
 }
 
+function ArrowDefs({ suffix }: { suffix: string }) {
+  return (
+    <defs>
+      <marker
+        id={`arrow-gray${suffix}`}
+        markerWidth="8"
+        markerHeight="8"
+        refX="6"
+        refY="3"
+        orient="auto"
+      >
+        <path d="M0,0 L6,3 L0,6 Z" fill="#94a3b8" />
+      </marker>
+      <marker
+        id={`arrow-sky${suffix}`}
+        markerWidth="8"
+        markerHeight="8"
+        refX="6"
+        refY="3"
+        orient="auto"
+      >
+        <path d="M0,0 L6,3 L0,6 Z" fill="#0ea5e9" />
+      </marker>
+    </defs>
+  );
+}
+
+function EdgePath({
+  edge,
+  id,
+  suffix,
+  draw,
+  length = 700,
+  marker = true,
+}: {
+  edge: EdgeDef;
+  id: string;
+  suffix: string;
+  draw: boolean;
+  length?: number;
+  marker?: boolean;
+}) {
+  return (
+    <path
+      id={id}
+      d={edge.d}
+      fill="none"
+      stroke={edge.highlight ? "#0ea5e9" : "#64748b"}
+      strokeWidth={edge.highlight ? 1.75 : 1.25}
+      markerEnd={marker ? `url(#arrow-${edge.highlight ? "sky" : "gray"}${suffix})` : undefined}
+      style={
+        draw
+          ? ({
+              strokeDasharray: length,
+              strokeDashoffset: length,
+              ["--edge-length"]: length,
+              animation: `edge-draw 1.1s ease-out ${edge.delay}ms forwards`,
+            } as CSSProperties)
+          : undefined
+      }
+    />
+  );
+}
+
+function EdgePulse({ edge, href, begin }: { edge: EdgeDef; href: string; begin: string }) {
+  return (
+    <circle r={3.5} fill={edge.highlight ? "#38bdf8" : "#cbd5e1"}>
+      <animateMotion dur="2.4s" begin={begin} repeatCount="indefinite">
+        <mpath href={href} />
+      </animateMotion>
+    </circle>
+  );
+}
+
 function DemoErd({
-  loopKey,
   stage,
   settled,
   typeProgress,
+  expandStep,
   reduced,
 }: {
-  loopKey: number;
   stage: Stage;
   settled: boolean;
   typeProgress: number;
+  expandStep: number;
   reduced: boolean;
 }) {
-  const cardRevealed = (card: CardDef) =>
-    settled || (stage === "type" && typeProgress >= card.appearAt);
+  const focused = settled || stage === "expand"; // core fully placed + connected
+  const coreRevealed = (card: CardDef) =>
+    focused || (stage === "type" && typeProgress >= card.appearAt);
+  const pulsing = (stage === "erd" || stage === "expand") && !reduced;
+  // Expand sub-phases: lines draw at step 1, outer tables form at step 2.
+  const linesDrawing = expandStep >= 1;
+  const tablesFormed = expandStep >= 2;
 
   return (
     <div
@@ -420,91 +656,104 @@ function DemoErd({
           "rotateX(calc(var(--py) * -5deg)) rotateY(calc(var(--px) * 7deg)) translate3d(calc(var(--px) * 12px), calc(var(--py) * 12px), 0)",
       }}
     >
-      <div className="relative scale-[0.52] sm:scale-[0.68] md:scale-90 lg:scale-100">
-        {/* Fixed 640×440 stage; cards positioned absolutely within. */}
-        <div className="relative h-[440px] w-[640px]">
+      <div className="relative scale-[0.4] sm:scale-[0.52] md:scale-[0.64] lg:scale-[0.8] xl:scale-[0.92]">
+        {/* Camera: zooms from the focused core out to the full schema. */}
+        <div
+          className="relative transition-transform duration-[1500ms] ease-in-out"
+          style={{ width: BIG_W, height: BIG_H, transform: CAMERA[stage] }}
+        >
+          {/* Outer-ring edges (draw in + pulse during the zoom-out). */}
           <svg
-            key={loopKey}
             className="absolute inset-0 h-full w-full overflow-visible"
-            viewBox="0 0 640 440"
+            viewBox={`0 0 ${BIG_W} ${BIG_H}`}
           >
-            <defs>
-              <marker
-                id="arrow-gray"
-                markerWidth="8"
-                markerHeight="8"
-                refX="6"
-                refY="3"
-                orient="auto"
-              >
-                <path d="M0,0 L6,3 L0,6 Z" fill="#94a3b8" />
-              </marker>
-              <marker
-                id="arrow-sky"
-                markerWidth="8"
-                markerHeight="8"
-                refX="6"
-                refY="3"
-                orient="auto"
-              >
-                <path d="M0,0 L6,3 L0,6 Z" fill="#0ea5e9" />
-              </marker>
-            </defs>
-
-            {/* Edges draw themselves in once the layout settles. */}
-            <g
-              className="transition-opacity duration-700"
-              style={{ opacity: settled ? 1 : 0 }}
-            >
-              {EDGES.map((edge, i) => (
-                <path
+            <ArrowDefs suffix="-x" />
+            <g className="transition-opacity duration-500" style={{ opacity: linesDrawing ? 1 : 0 }}>
+              {EXTRA_EDGES.map((edge, i) => (
+                <EdgePath
                   key={i}
-                  id={`hero-edge-${i}`}
-                  d={edge.d}
-                  fill="none"
-                  stroke={edge.highlight ? "#0ea5e9" : "#94a3b8"}
-                  strokeWidth={edge.highlight ? 2 : 1.5}
-                  markerEnd={edge.highlight ? "url(#arrow-sky)" : "url(#arrow-gray)"}
-                  style={
-                    settled
-                      ? ({
-                          strokeDasharray: 700,
-                          strokeDashoffset: 700,
-                          ["--edge-length"]: 700,
-                          animation: `edge-draw 1.1s ease-out ${edge.delay}ms forwards`,
-                        } as CSSProperties)
-                      : undefined
-                  }
+                  edge={edge}
+                  id={`hero-xedge-${i}`}
+                  suffix="-x"
+                  draw={linesDrawing}
+                  length={3800}
+                  marker={false}
                 />
               ))}
             </g>
-
-            {/* Relationship pulses travel each edge once settled. */}
-            {stage === "erd" && !reduced && (
+            {tablesFormed && !reduced && (
               <g>
-                {EDGES.map((edge, i) => (
-                  <circle key={i} r={3.5} fill={edge.highlight ? "#38bdf8" : "#cbd5e1"}>
-                    <animateMotion
-                      dur="2.4s"
-                      begin={`${1 + i * 0.4}s`}
-                      repeatCount="indefinite"
-                    >
-                      <mpath href={`#hero-edge-${i}`} />
-                    </animateMotion>
-                  </circle>
+                {EXTRA_EDGES.map((edge, i) => (
+                  <EdgePulse
+                    key={i}
+                    edge={edge}
+                    href={`#hero-xedge-${i}`}
+                    begin={`${i * 0.25}s`}
+                  />
                 ))}
               </g>
             )}
           </svg>
 
-          {CARDS.map((card) => (
+          {/* Outer-ring tables pop in instantly at the line ends once drawn. */}
+          {EXTRA_CARDS.map((card) => (
             <MiniCard
               key={card.name}
               card={card}
-              revealed={cardRevealed(card)}
-              settled={settled}
+              revealed={tablesFormed}
+              placed={tablesFormed}
+              revealMs={180}
+              rowMs={180}
+              rowStagger={0}
             />
           ))}
+
+          {/* The original core stage, centred in the big stage (untouched coords). */}
+          <div
+            className="absolute"
+            style={{ left: CORE_OFFSET.x, top: CORE_OFFSET.y }}
+          >
+            <div className="relative h-[440px] w-[640px]">
+              <svg
+                className="absolute inset-0 h-full w-full overflow-visible"
+                viewBox="0 0 640 440"
+              >
+                <ArrowDefs suffix="" />
+                <g className="transition-opacity duration-700" style={{ opacity: focused ? 1 : 0 }}>
+                  {EDGES.map((edge, i) => (
+                    <EdgePath
+                      key={i}
+                      edge={edge}
+                      id={`hero-edge-${i}`}
+                      suffix=""
+                      draw={settled}
+                    />
+                  ))}
+                </g>
+                {pulsing && (
+                  <g>
+                    {EDGES.map((edge, i) => (
+                      <EdgePulse
+                        key={i}
+                        edge={edge}
+                        href={`#hero-edge-${i}`}
+                        begin={`${1 + i * 0.4}s`}
+                      />
+                    ))}
+                  </g>
+                )}
+              </svg>
+
+              {CARDS.map((card) => (
+                <MiniCard
+                  key={card.name}
+                  card={card}
+                  revealed={coreRevealed(card)}
+                  placed={focused}
+                />
+              ))}
+            </div>
+          </div>
         </div>
       </div>
     </div>
