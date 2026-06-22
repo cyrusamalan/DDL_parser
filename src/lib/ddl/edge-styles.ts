@@ -25,3 +25,11 @@ export const DIMMED_EDGE_STYLE = {
   strokeWidth: 1.2,
   opacity: 0.12,
 } as const;
+
+/** High-contrast edges for PNG export on a white background. */
+export const EXPORT_EDGE_COLOR = "#171717";
+export const EXPORT_EDGE_STYLE = {
+  stroke: EXPORT_EDGE_COLOR,
+  strokeWidth: 2.5,
+  opacity: 1,
+} as const;

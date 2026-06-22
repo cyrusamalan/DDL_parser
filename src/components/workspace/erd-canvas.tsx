@@ -7,6 +7,8 @@ import {
   Panel,
   ReactFlow,
   ReactFlowProvider,
+  getNodesBounds,
+  getViewportForBounds,
   useReactFlow,
   type Edge,
   type EdgeChange,
@@ -16,9 +18,10 @@ import {
   type Viewport,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { Lock, LockOpen, Settings2, X } from "lucide-react";
+import { Download, Lock, LockOpen, Settings2, X } from "lucide-react";
 import { DiagramDisplayProvider } from "@/components/workspace/diagram-display-context";
 import { DiagramFocusProvider, useDiagramFocus } from "@/components/workspace/diagram-focus-context";
+import { ExportCaptureProvider, useExportCapture } from "@/components/workspace/export-capture-context";
 import { DiagramToolbar } from "@/components/workspace/diagram-toolbar";
 import { ErdZoomControls } from "@/components/workspace/erd-zoom-controls";
 import { FkEdge } from "@/components/workspace/fk-edge";
@@ -37,6 +40,108 @@ import type { DiagramGrouping, DiagramSettings, FkEdgeData, TableFlowNode } from
 
 const nodeTypes = { tableNode: TableNode };
 const edgeTypes = { fkEdge: FkEdge };
+
+const EXPORT_PNG_FILENAME = "ddl-erd-diagram.png";
+const EXPORT_PNG_MIN_WIDTH = 4096;
+const EXPORT_PNG_MAX_PIXEL_RATIO = 12;
+const EXPORT_VIEW_PADDING = 0.04;
+
+function exportPixelRatio(zoom: number, viewportWidth: number): number {
+  const zoomRatio = Math.ceil(3 / Math.max(zoom, 0.01));
+  const widthRatio = Math.ceil(EXPORT_PNG_MIN_WIDTH / Math.max(viewportWidth, 1));
+  return Math.min(EXPORT_PNG_MAX_PIXEL_RATIO, Math.max(4, zoomRatio, widthRatio));
+}
+
+function nextAnimationFrames(count = 2): Promise<void> {
+  return new Promise((resolve) => {
+    const tick = (remaining: number) => {
+      if (remaining <= 0) {
+        resolve();
+        return;
+      }
+      requestAnimationFrame(() => tick(remaining - 1));
+    };
+    tick(count);
+  });
+}
+
+function ErdExportPngButton({ baseNodes }: { baseNodes: TableFlowNode[] }) {
+  const { getViewport, setViewport } = useReactFlow();
+  const { setCapturing } = useExportCapture();
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleExport = useCallback(async () => {
+    if (baseNodes.length === 0 || isExporting) return;
+
+    setIsExporting(true);
+    const previousViewport = getViewport();
+
+    try {
+      const flowEl = document.querySelector(".erd-canvas-flow") as HTMLElement | null;
+      const viewportEl = document.querySelector(
+        ".erd-canvas-flow .react-flow__viewport",
+      ) as HTMLElement | null;
+      if (!flowEl || !viewportEl) {
+        throw new Error("Canvas viewport not found");
+      }
+
+      setCapturing(true);
+      flowEl.classList.add("erd-export-capture");
+      await nextAnimationFrames(2);
+
+      const viewportWidth = viewportEl.clientWidth;
+      const viewportHeight = viewportEl.clientHeight;
+      const bounds = getNodesBounds(baseNodes);
+      const exportViewport = getViewportForBounds(
+        bounds,
+        viewportWidth,
+        viewportHeight,
+        0.01,
+        4,
+        EXPORT_VIEW_PADDING,
+      );
+
+      await setViewport(exportViewport, { duration: 0 });
+      await nextAnimationFrames(3);
+
+      const pixelRatio = exportPixelRatio(exportViewport.zoom, viewportWidth);
+      const { toPng } = await import("html-to-image");
+      const dataUrl = await toPng(viewportEl, {
+        cacheBust: true,
+        backgroundColor: "#ffffff",
+        width: viewportWidth,
+        height: viewportHeight,
+        pixelRatio,
+      });
+
+      const link = document.createElement("a");
+      link.download = EXPORT_PNG_FILENAME;
+      link.href = dataUrl;
+      link.click();
+    } catch (error) {
+      console.error("PNG export failed:", error);
+    } finally {
+      const flowEl = document.querySelector(".erd-canvas-flow") as HTMLElement | null;
+      flowEl?.classList.remove("erd-export-capture");
+      setCapturing(false);
+      setViewport(previousViewport, { duration: 0 });
+      setIsExporting(false);
+    }
+  }, [baseNodes, getViewport, isExporting, setCapturing, setViewport]);
+
+  return (
+    <button
+      type="button"
+      onClick={() => void handleExport()}
+      disabled={isExporting || baseNodes.length === 0}
+      className="flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-700 shadow-md transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+      aria-label="Export PNG"
+      title="Export PNG"
+    >
+      <Download className="h-4 w-4" />
+    </button>
+  );
+}
 
 function WorkspaceLockButton({
   readOnly,
@@ -203,7 +308,9 @@ function ErdCanvasFlow({
       onlyRenderVisibleElements
       selectNodesOnDrag={false}
       autoPanOnNodeDrag={false}
-      className={readOnly ? "cursor-grab active:cursor-grabbing" : undefined}
+      className={
+        readOnly ? "erd-canvas-flow cursor-grab active:cursor-grabbing" : "erd-canvas-flow"
+      }
       minZoom={0.02}
       maxZoom={2.5}
       proOptions={{ hideAttribution: true }}
@@ -299,6 +406,7 @@ function ErdCanvasFlow({
         <Panel position="top-right" className="!m-3">
           <div className="flex items-center gap-2">
             <WorkspaceLockButton readOnly={readOnly} onReadOnlyChange={onReadOnlyChange} />
+            <ErdExportPngButton baseNodes={baseNodes} />
             <button
               type="button"
               onClick={onOpenSettings}
@@ -527,7 +635,8 @@ function ErdCanvasInner({
 
   return (
     <DiagramDisplayProvider columnView={diagramSettings.columnView} grouping={grouping}>
-      <DiagramFocusProvider
+      <ExportCaptureProvider>
+        <DiagramFocusProvider
         focusedNodeId={focusedNodeId}
         focusedGroupId={focusedGroupId}
         grouping={grouping}
@@ -559,7 +668,8 @@ function ErdCanvasInner({
           modelOverviewCollapsed={modelOverviewCollapsed}
           onModelOverviewCollapsedChange={setModelOverviewCollapsed}
         />
-      </DiagramFocusProvider>
+        </DiagramFocusProvider>
+      </ExportCaptureProvider>
     </DiagramDisplayProvider>
   );
 }

@@ -7,9 +7,11 @@ import {
   type EdgeProps,
 } from "@xyflow/react";
 import { useDiagramFocus } from "@/components/workspace/diagram-focus-context";
+import { useExportCapture } from "@/components/workspace/export-capture-context";
 import {
   DEFAULT_EDGE_STYLE,
   DIMMED_EDGE_STYLE,
+  EXPORT_EDGE_STYLE,
   FOCUS_EDGE_STYLE,
   HOVER_EDGE_STYLE,
 } from "@/lib/ddl/edge-styles";
@@ -29,6 +31,7 @@ function FkEdgeComponent({
   interactionWidth,
 }: EdgeProps) {
   const { getEdgeVisualState } = useDiagramFocus();
+  const { isCapturing } = useExportCapture();
   const visualState = getEdgeVisualState({ id, source, target });
 
   const [edgePath] = getSmoothStepPath({
@@ -43,7 +46,9 @@ function FkEdgeComponent({
 
   let edgeStyle = { ...DEFAULT_EDGE_STYLE, ...style };
 
-  if (visualState === "focused") {
+  if (isCapturing) {
+    edgeStyle = { ...edgeStyle, ...EXPORT_EDGE_STYLE };
+  } else if (visualState === "focused") {
     edgeStyle = { ...edgeStyle, ...FOCUS_EDGE_STYLE };
   } else if (visualState === "dimmed") {
     edgeStyle = { ...edgeStyle, ...DIMMED_EDGE_STYLE };

@@ -162,3 +162,16 @@ body {
   stroke-linecap: round;
   stroke-linejoin: round;
 }
+
+/* Full-opacity nodes during PNG export (clears focus dimming) */
+.erd-export-capture .react-flow__node {
+  opacity: 1 !important;
+}
+
+/* Dark arrowheads to match export edge strokes on white background */
+.erd-export-capture marker path,
+.erd-export-capture marker polygon,
+.erd-export-capture marker polyline {
+  fill: #171717 !important;
+  stroke: #171717 !important;
+}
