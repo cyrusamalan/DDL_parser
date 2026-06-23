@@ -1,7 +1,7 @@
 "use client";
 
 import { Sparkles } from "lucide-react";
-import { DIALECT_LABELS, type DialectSource } from "@/lib/ddl/detect-dialect";
+import { DIALECT_GROUPS, DIALECT_LABELS, type DialectSource } from "@/lib/ddl/detect-dialect";
 import type { SqlDialect } from "@/lib/types/diagram";
 
 type DialectSelectorProps = {
@@ -56,10 +56,14 @@ export function DialectSelector({
             compact ? "text-xs" : ""
           }`}
         >
-          {(Object.entries(DIALECT_LABELS) as [SqlDialect, string][]).map(([value, label]) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
+          {DIALECT_GROUPS.map((group) => (
+            <optgroup key={group.label} label={group.label}>
+              {group.dialects.map((value) => (
+                <option key={value} value={value}>
+                  {DIALECT_LABELS[value]}
+                </option>
+              ))}
+            </optgroup>
           ))}
         </select>
       </div>

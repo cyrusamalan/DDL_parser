@@ -21,6 +21,7 @@ import {
 } from "@/components/workspace/workspace-header-context";
 import { useDialectSelection } from "@/hooks/use-dialect-selection";
 import { optimizeEdgeHandles } from "@/lib/ddl/optimize-edge-handles";
+import { stampNodeKeyColumnsFromEdges } from "@/lib/ddl/ddl-to-flow";
 import { relayoutNodes } from "@/lib/ddl/layout-graph";
 import {
   assignTable,
@@ -64,7 +65,10 @@ export function WorkspaceClient({ diagram }: WorkspaceClientProps) {
       ? [{ id: "legacy-sql", name: "SQL", sql: canvasState.sql }]
       : []);
 
-  const initialNodes = canvasState.nodes ?? [];
+  const initialNodes = stampNodeKeyColumnsFromEdges(
+    canvasState.nodes ?? [],
+    canvasState.edges ?? [],
+  );
   const initialEdges = optimizeEdgeHandles(
     initialNodes,
     canvasState.edges ?? [],

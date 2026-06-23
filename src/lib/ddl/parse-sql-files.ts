@@ -1,5 +1,6 @@
 import { ddlSchemaToFlow, type FlowGraph } from "@/lib/ddl/ddl-to-flow";
 import type { ParsedForeignKey, ParsedSchema, ParsedTable } from "@/lib/ddl/ast-walker";
+import { inferImplicitForeignKeys } from "@/lib/ddl/infer-implicit-fks";
 import type { DiagramSettings, SqlDialect, SqlFileEntry, TableFlowNode } from "@/lib/types/diagram";
 import { parsePostgresDdl, type ParseDdlResult } from "@/lib/ddl/parse-postgres-ddl";
 
@@ -102,7 +103,12 @@ export async function parseSqlFileEntries(
     return { ok: false, error: "No CREATE TABLE statements found in the uploaded files." };
   }
 
-  const { schema, sourceFileByTable } = mergeSchemas(fileSchemas);
+  const { schema: merged, sourceFileByTable } = mergeSchemas(fileSchemas);
+
+  const schema =
+    dialect === "trino"
+      ? inferImplicitForeignKeys({ tables: merged.tables, foreignKeys: [] })
+      : merged;
 
   if (schema.tables.length === 0) {
     return { ok: false, error: "No CREATE TABLE statements found in the uploaded files." };

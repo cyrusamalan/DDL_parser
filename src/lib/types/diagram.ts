@@ -1,6 +1,18 @@
 import type { Edge, Node, Viewport } from "@xyflow/react";
 
-export type SqlDialect = "postgresql" | "mysql" | "mariadb" | "sqlite" | "mssql" | "bigquery";
+export type SqlDialect =
+  | "postgresql"
+  | "mysql"
+  | "mariadb"
+  | "sqlite"
+  | "mssql"
+  | "bigquery"
+  | "snowflake"
+  | "redshift"
+  | "db2"
+  | "trino"
+  | "hive"
+  | "flink";
 
 /** @deprecated Use sqlFileSelection array instead. */
 export type SqlFileScope = "all" | { fileId: string };

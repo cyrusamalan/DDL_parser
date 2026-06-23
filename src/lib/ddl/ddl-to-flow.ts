@@ -25,6 +25,73 @@ function buildNodeData(table: ParsedSchema["tables"][number]): TableNodeData {
   };
 }
 
+/** Ensure React Flow handles exist on FK source/target columns (e.g. Trino has no declared PKs). */
+function stampForeignKeyColumnFlags(schema: ParsedSchema): ParsedSchema {
+  const tables = schema.tables.map((table) => ({
+    ...table,
+    columns: table.columns.map((column) => ({ ...column })),
+  }));
+  const tableByName = new Map(tables.map((table) => [table.name, table]));
+
+  for (const fk of schema.foreignKeys) {
+    const fromCol = tableByName
+      .get(fk.fromTable)
+      ?.columns.find((column) => column.name === fk.fromColumn);
+    const toCol = tableByName
+      .get(fk.toTable)
+      ?.columns.find((column) => column.name === fk.toColumn);
+    if (fromCol) fromCol.isForeignKey = true;
+    if (toCol && !toCol.isForeignKey) toCol.isPrimaryKey = true;
+  }
+
+  return { tables, foreignKeys: schema.foreignKeys };
+}
+
+function fkColumnsFromEdge(edge: Edge): { fromColumn?: string; toColumn?: string } {
+  const data = edge.data as FkEdgeData | undefined;
+  if (data?.fromColumn && data?.toColumn) {
+    return { fromColumn: data.fromColumn, toColumn: data.toColumn };
+  }
+
+  const sourceHandle = edge.sourceHandle ?? "";
+  const targetHandle = edge.targetHandle ?? "";
+  return {
+    fromColumn: sourceHandle.replace(/-source(?:-(?:left|right|top|bottom))?$/, "") || undefined,
+    toColumn: targetHandle.replace(/-target(?:-(?:left|right|top|bottom))?$/, "") || undefined,
+  };
+}
+
+/** Patch saved node column flags so FK handles render (needed when reloading Trino diagrams). */
+export function stampNodeKeyColumnsFromEdges(
+  nodes: TableFlowNode[],
+  edges: Edge[],
+): TableFlowNode[] {
+  const nextNodes = nodes.map((node) => ({
+    ...node,
+    data: {
+      ...node.data,
+      columns: node.data.columns.map((column) => ({ ...column })),
+    },
+  }));
+  const nodeById = new Map(nextNodes.map((node) => [node.id, node]));
+
+  for (const edge of edges) {
+    const { fromColumn, toColumn } = fkColumnsFromEdge(edge);
+    const sourceNode = nodeById.get(edge.source);
+    const targetNode = nodeById.get(edge.target);
+    if (sourceNode && fromColumn) {
+      const column = sourceNode.data.columns.find((col) => col.name === fromColumn);
+      if (column) column.isForeignKey = true;
+    }
+    if (targetNode && toColumn) {
+      const column = targetNode.data.columns.find((col) => col.name === toColumn);
+      if (column && !column.isForeignKey) column.isPrimaryKey = true;
+    }
+  }
+
+  return nextNodes;
+}
+
 function buildEdges(foreignKeys: ParsedForeignKey[]): Edge[] {
   return foreignKeys.map((fk) => {
     const data: FkEdgeData = {
@@ -56,12 +123,14 @@ export async function ddlSchemaToFlow(
   existingNodes: TableFlowNode[] = [],
   settings?: DiagramSettings,
 ): Promise<FlowGraph> {
+  const stamped = stampForeignKeyColumnFlags(schema);
+
   const preservedPositions = new Map<string, { x: number; y: number }>();
   for (const node of existingNodes) {
     preservedPositions.set(node.id, node.position);
   }
 
-  const draftNodes: TableFlowNode[] = schema.tables.map((table) => {
+  const draftNodes: TableFlowNode[] = stamped.tables.map((table) => {
     const id = tableNodeId(table.name);
     return {
       id,
@@ -71,7 +140,7 @@ export async function ddlSchemaToFlow(
     };
   });
 
-  const edges = buildEdges(schema.foreignKeys);
+  const edges = buildEdges(stamped.foreignKeys);
   const resolvedSettings = mergeDiagramSettings(settings);
   const nodes = await layoutTableNodes(draftNodes, edges, preservedPositions, resolvedSettings);
 

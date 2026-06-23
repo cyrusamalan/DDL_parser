@@ -14,7 +14,8 @@
     "test:spacing": "node scripts/smoke-spacing.cjs",
     "test:linter": "node scripts/smoke-schema-linter.cjs",
     "test:bottlenecks": "node scripts/smoke-schema-bottlenecks.cjs",
-    "test:upload": "node scripts/smoke-read-sql-file.cjs"
+    "test:upload": "node scripts/smoke-read-sql-file.cjs",
+    "test:dialects": "node tests/smoke-dialects.cjs"
   },
   "dependencies": {
     "@clerk/nextjs": "^7.5.7",

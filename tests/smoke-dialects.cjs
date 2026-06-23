@@ -3,7 +3,20 @@
 const { execFileSync } = require("node:child_process");
 const { join } = require("node:path");
 
-const DIALECTS = ["postgresql", "mysql", "mariadb", "sqlite", "mssql", "bigquery"];
+const DIALECTS = [
+  "postgresql",
+  "mysql",
+  "mariadb",
+  "sqlite",
+  "mssql",
+  "bigquery",
+  "snowflake",
+  "redshift",
+  "db2",
+  "trino",
+  "hive",
+  "flink",
+];
 const MSSQL_NOTE = " (sanitizer only)";
 
 let allPassed = 0;
