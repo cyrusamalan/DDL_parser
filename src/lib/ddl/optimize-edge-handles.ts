@@ -95,14 +95,14 @@ export function optimizeEdgeHandles(
   return edges.map((edge) => {
     const sourceNode = nodeById.get(edge.source);
     const targetNode = nodeById.get(edge.target);
-    if (!sourceNode || !targetNode) return edge;
+    if (!sourceNode || !targetNode) return { ...edge, type: "fkEdge" };
 
     const sourceHandleId = edge.sourceHandle ?? "";
     const targetHandleId = edge.targetHandle ?? "";
     const sourceColumn = sourceHandleId.replace(/-source(?:-(?:left|right|top|bottom))?$/, "");
     const targetColumn = targetHandleId.replace(/-target(?:-(?:left|right|top|bottom))?$/, "");
 
-    if (!sourceColumn || !targetColumn) return edge;
+    if (!sourceColumn || !targetColumn) return { ...edge, type: "fkEdge" };
 
     const { sourceSide, targetSide } = pickHandleSides(
       sourceNode,
@@ -114,7 +114,7 @@ export function optimizeEdgeHandles(
 
     return {
       ...edge,
-      type: "smoothstep",
+      type: "fkEdge",
       pathOptions: { borderRadius: 8 },
       sourceHandle: handleId(sourceColumn, "source", sourceSide),
       targetHandle: handleId(targetColumn, "target", targetSide),

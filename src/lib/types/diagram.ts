@@ -15,7 +15,7 @@ export type TableNodeData = {
 export type TableFlowNode = Node<TableNodeData, "tableNode">;
 export type DiagramEdge = Edge;
 
-export type DiagramLayoutDirection = "vertical" | "landscape";
+export type DiagramLayoutDirection = "vertical" | "landscape" | "web";
 export type DiagramSpacing = "compact" | "normal" | "roomy";
 export type DiagramGridSize = 3 | 4 | 5 | 6;
 export type DiagramLayoutEngine = "elk" | "grid";

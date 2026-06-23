@@ -163,6 +163,24 @@ body {
   stroke-linejoin: round;
 }
 
+/* ERD canvas: pure-white FK edges (xyflow defaults to gray via --xy-edge-stroke-default). */
+.erd-canvas-flow {
+  --xy-edge-stroke: #ffffff;
+  --xy-edge-stroke-default: #ffffff;
+  --xy-edge-stroke-selected: #ffffff;
+}
+
+.erd-canvas-flow .react-flow__edge-path {
+  stroke: #ffffff;
+}
+
+.erd-canvas-flow marker path,
+.erd-canvas-flow marker polygon,
+.erd-canvas-flow marker polyline {
+  fill: #ffffff;
+  stroke: #ffffff;
+}
+
 /* Full-opacity nodes during PNG export (clears focus dimming) */
 .erd-export-capture .react-flow__node {
   opacity: 1 !important;

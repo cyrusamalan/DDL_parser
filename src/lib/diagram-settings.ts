@@ -46,7 +46,11 @@ export function mergeDiagramSettings(saved?: Partial<DiagramSettings> | null): D
 
   return {
     layoutDirection:
-      saved.layoutDirection === "landscape" ? "landscape" : "vertical",
+      saved.layoutDirection === "landscape"
+        ? "landscape"
+        : saved.layoutDirection === "web"
+          ? "web"
+          : "vertical",
     layoutEngine: saved.layoutEngine === "grid" ? "grid" : "elk",
     gridSize: validGridSize,
     spacing:

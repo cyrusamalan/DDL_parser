@@ -128,43 +128,48 @@ export function maxDirectedDepthFromRoots(
   nodeIds: string[],
   adjacency: AdjacencyMap,
 ): { maxDepth: number; deepestNode: string | null } {
-  const inDegree = new Map<string, number>();
+  // Kahn's algorithm: processes each node exactly once, so cycles (including
+  // self-referential FKs) are naturally skipped — nodes in cycles never reach
+  // in-degree zero and are never enqueued.
+  const remaining = new Map<string, number>();
   for (const id of nodeIds) {
-    inDegree.set(id, 0);
+    remaining.set(id, 0);
   }
   for (const id of nodeIds) {
     for (const neighbor of adjacency.get(id) ?? []) {
-      inDegree.set(neighbor, (inDegree.get(neighbor) ?? 0) + 1);
+      if (neighbor !== id) {
+        remaining.set(neighbor, (remaining.get(neighbor) ?? 0) + 1);
+      }
     }
   }
 
-  const roots = nodeIds.filter((id) => (inDegree.get(id) ?? 0) === 0);
-  const startNodes = roots.length > 0 ? roots : nodeIds;
+  const dp = new Map<string, number>();
+  const queue: string[] = [];
+  for (const id of nodeIds) {
+    if ((remaining.get(id) ?? 0) === 0) {
+      dp.set(id, 0);
+      queue.push(id);
+    }
+  }
 
   let maxDepth = 0;
   let deepestNode: string | null = null;
 
-  for (const start of startNodes) {
-    const depth = new Map<string, number>();
-    const queue: string[] = [start];
-    depth.set(start, 0);
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    const currentDepth = dp.get(current) ?? 0;
 
-    while (queue.length > 0) {
-      const current = queue.shift()!;
-      const currentDepth = depth.get(current) ?? 0;
-
-      for (const neighbor of adjacency.get(current) ?? []) {
-        const nextDepth = currentDepth + 1;
-        const existing = depth.get(neighbor);
-        if (existing === undefined || nextDepth > existing) {
-          depth.set(neighbor, nextDepth);
-          queue.push(neighbor);
-          if (nextDepth > maxDepth) {
-            maxDepth = nextDepth;
-            deepestNode = neighbor;
-          }
-        }
+    for (const neighbor of adjacency.get(current) ?? []) {
+      if (neighbor === current) continue;
+      const next = Math.max(dp.get(neighbor) ?? 0, currentDepth + 1);
+      dp.set(neighbor, next);
+      if (next > maxDepth) {
+        maxDepth = next;
+        deepestNode = neighbor;
       }
+      const rem = (remaining.get(neighbor) ?? 1) - 1;
+      remaining.set(neighbor, rem);
+      if (rem === 0) queue.push(neighbor);
     }
   }
 

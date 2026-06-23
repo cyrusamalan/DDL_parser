@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
-import { FileUp, Sparkles, Upload } from "lucide-react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { ClipboardPaste, FileUp, Pencil, Sparkles, Upload, X } from "lucide-react";
 import { readSqlFile } from "@/lib/read-sql-file";
 
 const SAMPLE_DDL = `CREATE TABLE users (
@@ -17,6 +17,8 @@ CREATE TABLE posts (
   body TEXT
 );`;
 
+type SqlSource = "none" | "file" | "paste";
+
 type DdlImportEditorProps = {
   sql: string;
   onSqlChange: (value: string) => void;
@@ -28,6 +30,105 @@ type DdlImportEditorProps = {
   compact?: boolean;
   readOnly?: boolean;
 };
+
+function PasteDdlDialog({
+  open,
+  draft,
+  onDraftChange,
+  onApply,
+  onClose,
+  readOnly,
+}: {
+  open: boolean;
+  draft: string;
+  onDraftChange: (value: string) => void;
+  onApply: () => void;
+  onClose: () => void;
+  readOnly: boolean;
+}) {
+  const titleId = useId();
+
+  useEffect(() => {
+    if (!open) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <button
+        type="button"
+        className="absolute inset-0 bg-zinc-950/50 backdrop-blur-sm"
+        aria-label="Close paste DDL dialog"
+        onClick={onClose}
+      />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="relative z-10 flex w-full max-w-2xl flex-col rounded-2xl border border-zinc-200 bg-white shadow-xl dark:border-zinc-700 dark:bg-zinc-900"
+      >
+        <div className="border-b border-zinc-200 px-5 py-4 dark:border-zinc-800">
+          <h2 id={titleId} className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
+            Paste DDL
+          </h2>
+          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+            Paste PostgreSQL DDL below, then click Use pasted SQL.
+          </p>
+        </div>
+
+        <div className="flex flex-1 flex-col gap-3 p-5">
+          <textarea
+            value={draft}
+            onChange={(event) => onDraftChange(event.target.value)}
+            readOnly={readOnly}
+            placeholder={SAMPLE_DDL}
+            className="min-h-[280px] w-full resize-y rounded-xl border border-zinc-300 bg-white p-4 font-mono text-xs leading-6 text-zinc-900 outline-none ring-sky-500 focus:ring-2 read-only:cursor-default read-only:opacity-80 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+            spellCheck={false}
+            autoFocus
+          />
+
+          <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
+            <span>Need an example?</span>
+            <button
+              type="button"
+              onClick={() => onDraftChange(SAMPLE_DDL)}
+              disabled={readOnly}
+              className="font-medium text-sky-700 underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:opacity-50 dark:text-sky-400"
+            >
+              Load sample schema
+            </button>
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-2 border-t border-zinc-200 px-5 py-4 dark:border-zinc-800">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:bg-zinc-800"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onApply}
+            disabled={readOnly || !draft.trim()}
+            className="rounded-xl bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
+          >
+            Use pasted SQL
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export function DdlImportEditor({
   sql,
@@ -43,15 +144,32 @@ export function DdlImportEditor({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
+  const [sqlSource, setSqlSource] = useState<SqlSource>("none");
   const [isDragging, setIsDragging] = useState(false);
+  const [pasteModalOpen, setPasteModalOpen] = useState(false);
+  const [pasteDraft, setPasteDraft] = useState("");
 
   const displayError = uploadError ?? error;
 
-  const handleSqlChange = (value: string) => {
+  const openPasteModal = () => {
+    if (readOnly) return;
+    setPasteDraft(sql);
+    setPasteModalOpen(true);
+  };
+
+  const applyPastedSql = () => {
     if (readOnly) return;
     setUploadError(null);
     setUploadedFileName(null);
-    onSqlChange(value);
+    setSqlSource("paste");
+    onSqlChange(pasteDraft);
+    setPasteModalOpen(false);
+  };
+
+  const clearPastedSql = () => {
+    if (readOnly) return;
+    setSqlSource("none");
+    onSqlChange("");
   };
 
   const loadFile = useCallback(
@@ -65,6 +183,7 @@ export function DdlImportEditor({
       }
 
       setUploadedFileName(result.fileName);
+      setSqlSource("file");
       onSqlChange(result.sql);
     },
     [onSqlChange, readOnly],
@@ -94,8 +213,6 @@ export function DdlImportEditor({
     if (event.currentTarget.contains(event.relatedTarget as Node)) return;
     setIsDragging(false);
   };
-
-  const textareaMinHeight = compact ? "min-h-[220px]" : "min-h-[320px]";
 
   return (
     <div className={compact ? "flex flex-1 flex-col gap-3" : "space-y-4"}>
@@ -148,32 +265,47 @@ export function DdlImportEditor({
       <div className="relative">
         <div className="absolute inset-x-0 top-0 flex items-center justify-center">
           <span className="bg-zinc-50 px-3 text-xs font-medium uppercase tracking-wide text-zinc-400 dark:bg-zinc-950 dark:text-zinc-500">
-            or paste DDL
+            or
           </span>
         </div>
         <div className="border-t border-zinc-200 pt-5 dark:border-zinc-800" />
       </div>
 
-      <textarea
-        value={sql}
-        onChange={(event) => handleSqlChange(event.target.value)}
-        readOnly={readOnly}
-        placeholder={SAMPLE_DDL}
-        className={`${textareaMinHeight} w-full resize-none rounded-2xl border border-zinc-300 bg-white p-4 font-mono text-xs leading-6 text-zinc-900 outline-none ring-sky-500 focus:ring-2 read-only:cursor-default read-only:opacity-80 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100`}
-        spellCheck={false}
-      />
+      <div className="flex justify-center">
+        <button
+          type="button"
+          onClick={openPasteModal}
+          disabled={isGenerating || readOnly}
+          className="inline-flex items-center gap-2 rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:bg-zinc-800"
+        >
+          <ClipboardPaste className="h-4 w-4" />
+          Paste DDL
+        </button>
+      </div>
 
-      {!compact && (
-        <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
-          <span>Need an example?</span>
-          <button
-            type="button"
-            onClick={() => handleSqlChange(SAMPLE_DDL)}
-            disabled={readOnly}
-            className="font-medium text-sky-700 underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:opacity-50 dark:text-sky-400"
-          >
-            Load sample schema
-          </button>
+      {sqlSource === "paste" && sql.trim() && (
+        <div className="flex items-center justify-between gap-2 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-xs dark:border-sky-900 dark:bg-sky-950/50">
+          <span className="font-medium text-sky-900 dark:text-sky-200">Pasted SQL ready</span>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={openPasteModal}
+              disabled={readOnly}
+              className="inline-flex items-center gap-1 rounded-md px-2 py-1 font-medium text-sky-800 transition hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-50 dark:text-sky-300 dark:hover:bg-sky-900/60"
+            >
+              <Pencil className="h-3 w-3" />
+              Edit
+            </button>
+            <button
+              type="button"
+              onClick={clearPastedSql}
+              disabled={readOnly}
+              className="inline-flex items-center gap-1 rounded-md px-2 py-1 font-medium text-zinc-600 transition hover:bg-zinc-200/80 disabled:cursor-not-allowed disabled:opacity-50 dark:text-zinc-400 dark:hover:bg-zinc-800"
+            >
+              <X className="h-3 w-3" />
+              Clear
+            </button>
+          </div>
         </div>
       )}
 
@@ -212,6 +344,15 @@ export function DdlImportEditor({
         <Sparkles className="h-4 w-4" />
         {isGenerating ? "Generating..." : generateLabel}
       </button>
+
+      <PasteDdlDialog
+        open={pasteModalOpen}
+        draft={pasteDraft}
+        onDraftChange={setPasteDraft}
+        onApply={applyPastedSql}
+        onClose={() => setPasteModalOpen(false)}
+        readOnly={readOnly}
+      />
     </div>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type MouseEvent } from "react";
 import {
   Background,
   MiniMap,
@@ -298,7 +298,12 @@ function ErdCanvasFlow({
       onEdgeMouseEnter={handleEdgeMouseEnter}
       onEdgeMouseLeave={handleEdgeMouseLeave}
       onMoveEnd={handleMoveEnd}
-      fitView={false}
+      fitView
+      fitViewOptions={{
+        padding: fitViewPaddingForSpacing(diagramSettings.spacing),
+        minZoom: 0.02,
+        maxZoom: 1,
+      }}
       panOnScroll
       zoomOnScroll
       {...(readOnly ? { panOnDrag: true, nodesDraggable: false } : { nodesDraggable: true })}
@@ -314,6 +319,7 @@ function ErdCanvasFlow({
       minZoom={0.02}
       maxZoom={2.5}
       proOptions={{ hideAttribution: true }}
+      defaultMarkerColor={DEFAULT_EDGE_COLOR}
       defaultEdgeOptions={{
         type: "fkEdge",
         style: DEFAULT_EDGE_STYLE,
@@ -568,25 +574,6 @@ function ErdCanvasInner({
     },
     [allNodeIds, fitGroupFocus, grouping, onFocusChange, visibleNodeIds],
   );
-
-  const hasInitialFitRef = useRef(false);
-
-  useEffect(() => {
-    if (hasInitialFitRef.current || baseNodes.length === 0) return;
-
-    hasInitialFitRef.current = true;
-    let innerFrame = 0;
-    const outerFrame = requestAnimationFrame(() => {
-      innerFrame = requestAnimationFrame(() => {
-        fitDiagram();
-      });
-    });
-
-    return () => {
-      cancelAnimationFrame(outerFrame);
-      cancelAnimationFrame(innerFrame);
-    };
-  }, [baseNodes.length, fitDiagram]);
 
   useEffect(() => {
     if (!fitViewOnGenerate || baseNodes.length === 0) return;

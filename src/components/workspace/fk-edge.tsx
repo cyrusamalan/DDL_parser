@@ -9,9 +9,12 @@ import {
 import { useDiagramFocus } from "@/components/workspace/diagram-focus-context";
 import { useExportCapture } from "@/components/workspace/export-capture-context";
 import {
+  DEFAULT_EDGE_COLOR,
   DEFAULT_EDGE_STYLE,
   DIMMED_EDGE_STYLE,
+  EXPORT_EDGE_COLOR,
   EXPORT_EDGE_STYLE,
+  FOCUS_EDGE_COLOR,
   FOCUS_EDGE_STYLE,
   HOVER_EDGE_STYLE,
 } from "@/lib/ddl/edge-styles";
@@ -27,7 +30,6 @@ function FkEdgeComponent({
   sourcePosition,
   targetPosition,
   markerEnd,
-  style,
   interactionWidth,
 }: EdgeProps) {
   const { getEdgeVisualState } = useDiagramFocus();
@@ -44,7 +46,7 @@ function FkEdgeComponent({
     borderRadius: 8,
   });
 
-  let edgeStyle = { ...DEFAULT_EDGE_STYLE, ...style };
+  let edgeStyle = { ...DEFAULT_EDGE_STYLE };
 
   if (isCapturing) {
     edgeStyle = { ...edgeStyle, ...EXPORT_EDGE_STYLE };
@@ -56,12 +58,28 @@ function FkEdgeComponent({
     edgeStyle = { ...edgeStyle, ...HOVER_EDGE_STYLE };
   }
 
+  const markerColor = isCapturing
+    ? EXPORT_EDGE_COLOR
+    : visualState === "focused"
+      ? FOCUS_EDGE_COLOR
+      : DEFAULT_EDGE_COLOR;
+
+  const resolvedMarkerEnd =
+    typeof markerEnd === "string"
+      ? markerEnd
+      : markerEnd
+        ? { ...markerEnd, color: markerColor }
+        : { type: "arrowclosed" as const, color: markerColor };
+
   return (
     <BaseEdge
       id={id}
       path={edgePath}
-      markerEnd={markerEnd}
+      markerEnd={resolvedMarkerEnd}
       style={edgeStyle}
+      stroke={edgeStyle.stroke}
+      strokeWidth={edgeStyle.strokeWidth}
+      opacity={edgeStyle.opacity}
       interactionWidth={interactionWidth ?? 20}
     />
   );

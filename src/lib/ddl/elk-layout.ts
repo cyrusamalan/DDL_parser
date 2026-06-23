@@ -11,7 +11,44 @@ const BASE_NODE_SPACING = 56;
 const BASE_LAYER_SPACING = 120;
 
 function elkDirection(settings: DiagramSettings): string {
-  return settings.layoutDirection === "landscape" ? "RIGHT" : "DOWN";
+  if (settings.layoutDirection === "landscape") return "RIGHT";
+  return "DOWN";
+}
+
+function buildElkLayoutOptions(
+  settings: DiagramSettings,
+  partitions: Map<string, number> | null,
+): Record<string, string> {
+  const spacing = elkSpacing(settings);
+
+  if (settings.layoutDirection === "web") {
+    const options: Record<string, string> = {
+      "elk.algorithm": "stress",
+      "elk.spacing.nodeNode": String(spacing.nodeNode),
+      "elk.stress.desiredEdgeLength": String(Math.round(TABLE_WIDTH * 1.4)),
+      "elk.stress.epsilon": "0.0001",
+    };
+    if (partitions) {
+      options["elk.partitioning.activate"] = "true";
+    }
+    return options;
+  }
+
+  const options: Record<string, string> = {
+    "elk.algorithm": "layered",
+    "elk.direction": elkDirection(settings),
+    "elk.edgeRouting": "ORTHOGONAL",
+    "elk.spacing.nodeNode": String(spacing.nodeNode),
+    "elk.layered.spacing.nodeNodeBetweenLayers": String(spacing.layer),
+    "elk.layered.spacing.edgeNodeBetweenLayers": String(spacing.layer),
+    "elk.layered.spacing.componentComponent": String(spacing.nodeNode * 2),
+    "elk.layered.crossingMinimization.strategy": "LAYER_SWEEP",
+    "elk.layered.nodePlacement.strategy": "NETWORK_SIMPLEX",
+  };
+  if (partitions) {
+    options["elk.partitioning.activate"] = "true";
+  }
+  return options;
 }
 
 function elkSpacing(settings: DiagramSettings): { nodeNode: number; layer: number } {
@@ -28,23 +65,7 @@ function buildElkGraph(
   settings: DiagramSettings,
   partitions: Map<string, number> | null,
 ) {
-  const spacing = elkSpacing(settings);
-
-  const layoutOptions: Record<string, string> = {
-    "elk.algorithm": "layered",
-    "elk.direction": elkDirection(settings),
-    "elk.edgeRouting": "ORTHOGONAL",
-    "elk.spacing.nodeNode": String(spacing.nodeNode),
-    "elk.layered.spacing.nodeNodeBetweenLayers": String(spacing.layer),
-    "elk.layered.spacing.edgeNodeBetweenLayers": String(spacing.layer),
-    "elk.layered.spacing.componentComponent": String(spacing.nodeNode * 2),
-    "elk.layered.crossingMinimization.strategy": "LAYER_SWEEP",
-    "elk.layered.nodePlacement.strategy": "NETWORK_SIMPLEX",
-  };
-
-  if (partitions) {
-    layoutOptions["elk.partitioning.activate"] = "true";
-  }
+  const layoutOptions = buildElkLayoutOptions(settings, partitions);
 
   return {
     id: "root",

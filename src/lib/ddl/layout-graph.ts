@@ -1,6 +1,7 @@
 import type { Edge } from "@xyflow/react";
 import { mergeDiagramSettings, spacingMultiplier } from "@/lib/diagram-settings";
 import { elkLayoutTableNodes } from "@/lib/ddl/elk-layout";
+import { webLayoutTableNodes } from "@/lib/ddl/web-layout";
 import { buildNodePartitions } from "@/lib/ddl/table-grouping";
 import { optimizeEdgeHandles } from "@/lib/ddl/optimize-edge-handles";
 import { TABLE_WIDTH, estimateTableNodeHeight } from "./node-metrics";
@@ -252,6 +253,10 @@ function computeLayout(
   settings: DiagramSettings,
   grouping?: DiagramGrouping,
 ): Map<string, { x: number; y: number }> {
+  if (settings.layoutDirection === "web") {
+    return webLayoutTableNodes(nodes, edges, settings, grouping);
+  }
+
   const clustered = computeClusteredGridLayout(nodes, settings, grouping);
   if (clustered.size > 0) {
     return clustered;
@@ -374,7 +379,9 @@ export async function layoutTableNodes(
 
   let autoPositions: Map<string, { x: number; y: number }>;
 
-  if (resolvedSettings.layoutEngine === "elk") {
+  if (resolvedSettings.layoutDirection === "web") {
+    autoPositions = webLayoutTableNodes(nodes, edges, resolvedSettings, grouping);
+  } else if (resolvedSettings.layoutEngine === "elk") {
     try {
       autoPositions = await elkLayoutTableNodes(nodes, edges, resolvedSettings, grouping);
       if (autoPositions.size === 0) {
