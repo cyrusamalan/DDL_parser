@@ -2,22 +2,28 @@
 
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { DdlImportEditor } from "@/components/ddl/ddl-import-editor";
+import type { DialectSource } from "@/lib/ddl/detect-dialect";
+import type { SqlDialect, SqlFileEntry } from "@/lib/types/diagram";
 
 type SqlImportPanelProps = {
-  sql: string;
-  onSqlChange: (value: string) => void;
-  onGenerate: (sqlOverride?: string) => void;
+  sqlFiles: SqlFileEntry[];
+  onSqlFilesChange: (files: SqlFileEntry[]) => void;
+  onGenerate: () => void;
   isGenerating: boolean;
   error: string | null;
   sanitizeNotes: string[];
   collapsed: boolean;
   onToggleCollapsed: () => void;
   readOnly?: boolean;
+  dialect: SqlDialect;
+  dialectSource: DialectSource;
+  onDialectChange: (d: SqlDialect) => void;
+  onResetToAuto: () => void;
 };
 
 export function SqlImportPanel({
-  sql,
-  onSqlChange,
+  sqlFiles,
+  onSqlFilesChange,
   onGenerate,
   isGenerating,
   error,
@@ -25,6 +31,10 @@ export function SqlImportPanel({
   collapsed,
   onToggleCollapsed,
   readOnly = false,
+  dialect,
+  dialectSource,
+  onDialectChange,
+  onResetToAuto,
 }: SqlImportPanelProps) {
   if (collapsed) {
     return (
@@ -47,7 +57,7 @@ export function SqlImportPanel({
         <div>
           <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">SQL DDL</h2>
           <p className="text-xs text-zinc-500 dark:text-zinc-400">
-            Paste, drop, or upload to regenerate
+            Upload one or more .sql files to generate your ERD
           </p>
         </div>
         <button
@@ -62,8 +72,8 @@ export function SqlImportPanel({
 
       <div className="flex flex-1 flex-col overflow-y-auto p-4">
         <DdlImportEditor
-          sql={sql}
-          onSqlChange={onSqlChange}
+          sqlFiles={sqlFiles}
+          onSqlFilesChange={onSqlFilesChange}
           onGenerate={onGenerate}
           isGenerating={isGenerating}
           error={error}
@@ -71,6 +81,10 @@ export function SqlImportPanel({
           generateLabel="Regenerate"
           compact
           readOnly={readOnly}
+          dialect={dialect}
+          dialectSource={dialectSource}
+          onDialectChange={onDialectChange}
+          onResetToAuto={onResetToAuto}
         />
       </div>
     </aside>

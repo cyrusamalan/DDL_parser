@@ -26,6 +26,7 @@ import { DiagramToolbar } from "@/components/workspace/diagram-toolbar";
 import { ErdZoomControls } from "@/components/workspace/erd-zoom-controls";
 import { FkEdge } from "@/components/workspace/fk-edge";
 import { SchemaInfoPanel } from "@/components/workspace/schema-info-panel";
+import { SqlFilesFilter } from "@/components/workspace/sql-files-filter";
 import { TableNode } from "@/components/workspace/table-node";
 import { fitViewPaddingForSpacing } from "@/lib/diagram-settings";
 import { DEFAULT_EDGE_COLOR, DEFAULT_EDGE_STYLE } from "@/lib/ddl/edge-styles";
@@ -36,7 +37,7 @@ import {
   type GroupFocusId,
 } from "@/lib/ddl/group-focus";
 import { getIsolatedTableIds } from "@/lib/ddl/isolated-tables";
-import type { DiagramGrouping, DiagramSettings, FkEdgeData, TableFlowNode } from "@/lib/types/diagram";
+import type { DiagramGrouping, DiagramSettings, FkEdgeData, SqlFileEntry, TableFlowNode } from "@/lib/types/diagram";
 
 const nodeTypes = { tableNode: TableNode };
 const edgeTypes = { fkEdge: FkEdge };
@@ -188,6 +189,9 @@ type ErdCanvasProps = {
   onOpenSettings: () => void;
   readOnly: boolean;
   onReadOnlyChange: (readOnly: boolean) => void;
+  sqlFiles?: SqlFileEntry[];
+  sqlFileSelection?: string[];
+  onSqlFileSelectionChange?: (selection: string[]) => void;
 };
 
 type ErdCanvasFlowProps = {
@@ -213,6 +217,9 @@ type ErdCanvasFlowProps = {
   onReadOnlyChange: (readOnly: boolean) => void;
   modelOverviewCollapsed: boolean;
   onModelOverviewCollapsedChange: (collapsed: boolean) => void;
+  sqlFiles?: SqlFileEntry[];
+  sqlFileSelection?: string[];
+  onSqlFileSelectionChange?: (selection: string[]) => void;
 };
 
 function ErdCanvasFlow({
@@ -238,6 +245,9 @@ function ErdCanvasFlow({
   onReadOnlyChange,
   modelOverviewCollapsed,
   onModelOverviewCollapsedChange,
+  sqlFiles,
+  sqlFileSelection,
+  onSqlFileSelectionChange,
 }: ErdCanvasFlowProps) {
   const { hoveredEdgeId, setHoveredEdgeId } = useDiagramFocus();
 
@@ -408,6 +418,19 @@ function ErdCanvasFlow({
         </Panel>
       )}
 
+      {sqlFiles && sqlFiles.length >= 2 && (
+        <Panel position="top-right" className="!m-3 !mt-16">
+          <div className="w-52 rounded-xl border border-zinc-200 bg-white shadow-md dark:border-zinc-700 dark:bg-zinc-900">
+            <SqlFilesFilter
+              sqlFiles={sqlFiles}
+              selection={sqlFileSelection ?? []}
+              onSelectionChange={onSqlFileSelectionChange ?? (() => {})}
+              readOnly={readOnly}
+            />
+          </div>
+        </Panel>
+      )}
+
       {allNodes.length > 0 && (
         <Panel position="top-right" className="!m-3">
           <div className="flex items-center gap-2">
@@ -476,6 +499,9 @@ function ErdCanvasInner({
   onOpenSettings,
   readOnly,
   onReadOnlyChange,
+  sqlFiles,
+  sqlFileSelection,
+  onSqlFileSelectionChange,
 }: ErdCanvasProps) {
   const { fitView } = useReactFlow();
   const [searchHighlightId, setSearchHighlightId] = useState<string | null>(null);
@@ -654,6 +680,9 @@ function ErdCanvasInner({
           onReadOnlyChange={onReadOnlyChange}
           modelOverviewCollapsed={modelOverviewCollapsed}
           onModelOverviewCollapsedChange={setModelOverviewCollapsed}
+          sqlFiles={sqlFiles}
+          sqlFileSelection={sqlFileSelection}
+          onSqlFileSelectionChange={onSqlFileSelectionChange}
         />
         </DiagramFocusProvider>
       </ExportCaptureProvider>

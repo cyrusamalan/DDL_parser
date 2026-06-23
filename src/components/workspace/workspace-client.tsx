@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState, useTransition } from "react";
+import { useCallback, useMemo, useState, useTransition } from "react";
 import {
   applyEdgeChanges,
   applyNodeChanges,
@@ -19,6 +19,7 @@ import { TableGroupsPanel } from "@/components/workspace/table-groups-panel";
 import {
   useRegisterWorkspaceHeader,
 } from "@/components/workspace/workspace-header-context";
+import { useDialectSelection } from "@/hooks/use-dialect-selection";
 import { optimizeEdgeHandles } from "@/lib/ddl/optimize-edge-handles";
 import { relayoutNodes } from "@/lib/ddl/layout-graph";
 import {
@@ -33,12 +34,20 @@ import {
 } from "@/lib/ddl/table-grouping";
 import { mergeDiagramSettings } from "@/lib/diagram-settings";
 import { APP_MAIN_HEIGHT } from "@/lib/layout-constants";
+import {
+  defaultSqlFileSelection,
+  isTableVisibleForSelection,
+  resolveInitialSqlFileSelection,
+} from "@/lib/merge-sql-files";
+import { compactCanvasStateForSave } from "@/lib/canvas-state-size";
 import type { AiGroupingPreview } from "@/lib/ai/gemini-grouping";
 import type {
   CanvasState,
   Diagram,
   DiagramGrouping,
   DiagramSettings,
+  SqlDialect,
+  SqlFileEntry,
   TableFlowNode,
   TableGroupColor,
 } from "@/lib/types/diagram";
@@ -48,25 +57,34 @@ type WorkspaceClientProps = {
 };
 
 export function WorkspaceClient({ diagram }: WorkspaceClientProps) {
-  const initialNodes = diagram.canvas_state.nodes ?? [];
+  const canvasState = diagram.canvas_state;
+
+  const initialSqlFiles: SqlFileEntry[] = canvasState.sqlFiles ??
+    (canvasState.sql?.trim()
+      ? [{ id: "legacy-sql", name: "SQL", sql: canvasState.sql }]
+      : []);
+
+  const initialNodes = canvasState.nodes ?? [];
   const initialEdges = optimizeEdgeHandles(
     initialNodes,
-    diagram.canvas_state.edges ?? [],
-    mergeDiagramSettings(diagram.canvas_state.diagramSettings).columnView,
+    canvasState.edges ?? [],
+    mergeDiagramSettings(canvasState.diagramSettings).columnView,
   );
-  const initialGrouping = mergeGrouping(diagram.canvas_state.grouping);
+  const initialGrouping = mergeGrouping(canvasState.grouping);
   const hasInitialTableGroups =
     initialGrouping.groups.length > 0 ||
     Object.keys(initialGrouping.assignments).length > 0;
+
   const [projectName, setProjectName] = useState(diagram.project_name);
-  const [sql, setSql] = useState(diagram.canvas_state.sql ?? "");
+  const [sqlFiles, setSqlFiles] = useState<SqlFileEntry[]>(initialSqlFiles);
+  const [sqlFileSelection, setSqlFileSelection] = useState<string[]>(() =>
+    resolveInitialSqlFileSelection(initialSqlFiles, canvasState),
+  );
   const [nodes, setNodes] = useState<TableFlowNode[]>(initialNodes);
   const [edges, setEdges] = useState<Edge[]>(initialEdges);
-  const [viewport, setViewport] = useState<Viewport | undefined>(
-    diagram.canvas_state.viewport,
-  );
+  const [viewport, setViewport] = useState<Viewport | undefined>(canvasState.viewport);
   const [diagramSettings, setDiagramSettings] = useState<DiagramSettings>(() =>
-    mergeDiagramSettings(diagram.canvas_state.diagramSettings),
+    mergeDiagramSettings(canvasState.diagramSettings),
   );
   const [grouping, setGrouping] = useState<DiagramGrouping>(() => initialGrouping);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -89,6 +107,11 @@ export function WorkspaceClient({ diagram }: WorkspaceClientProps) {
   const [savedProjectName, setSavedProjectName] = useState(diagram.project_name);
   const [isLocked, setIsLocked] = useState(false);
 
+  const { dialect, dialectSource, syncFromInput, setManualDialect, resetToAuto } =
+    useDialectSelection({
+      initialDialect: (canvasState.dialect as SqlDialect | undefined) ?? "postgresql",
+    });
+
   const bumpCanvasRevision = useCallback(() => {
     setCanvasRevision((revision) => revision + 1);
   }, []);
@@ -96,16 +119,31 @@ export function WorkspaceClient({ diagram }: WorkspaceClientProps) {
   const projectNameDirty = projectName !== savedProjectName;
   const canvasDirty = canvasRevision !== savedCanvasRevision;
 
+  const allFileIds = useMemo(() => sqlFiles.map((f) => f.id), [sqlFiles]);
+
+  const visibleNodes = useMemo(
+    () => nodes.filter((n) => isTableVisibleForSelection(n, sqlFileSelection, allFileIds)),
+    [nodes, sqlFileSelection, allFileIds],
+  );
+
+  const visibleEdges = useMemo(() => {
+    const visibleIds = new Set(visibleNodes.map((n) => n.id));
+    return edges.filter((e) => visibleIds.has(e.source) && visibleIds.has(e.target));
+  }, [edges, visibleNodes]);
+
   const buildCanvasState = useCallback((): CanvasState => {
-    return {
+    return compactCanvasStateForSave({
       nodes,
       edges,
       viewport,
-      sql,
+      sql: sqlFiles.length === 0 ? "" : undefined,
+      sqlFiles: sqlFiles.length > 0 ? sqlFiles : undefined,
+      sqlFileSelection,
       diagramSettings,
       grouping,
-    };
-  }, [diagramSettings, edges, grouping, nodes, sql, viewport]);
+      dialect,
+    });
+  }, [dialect, diagramSettings, edges, grouping, nodes, sqlFiles, sqlFileSelection, viewport]);
 
   const handleSave = useCallback(async () => {
     setIsSaving(true);
@@ -272,36 +310,39 @@ export function WorkspaceClient({ diagram }: WorkspaceClientProps) {
     setAiPreview(null);
   }, []);
 
-  const handleGenerate = useCallback(
-    (sqlOverride?: string) => {
-      startGenerateTransition(async () => {
-        setParseError(null);
-        setSanitizeNotes([]);
-        setFocusedNodeId(null);
-        const sqlToParse = sqlOverride ?? sql;
-        const { parsePostgresDdl } = await import("@/lib/ddl/parse-postgres-ddl");
-        const result = await parsePostgresDdl(sqlToParse, [], diagramSettings);
-
-        if (!result.ok) {
-          setParseError(result.error);
-          return;
-        }
-
-        setSanitizeNotes(result.sanitizeNotes);
-        setNodes(result.graph.nodes);
-        setEdges(result.graph.edges);
-        setGrouping((current) =>
-          pruneAssignments(current, result.graph.nodes.map((node) => node.id)),
-        );
-        bumpCanvasRevision();
-        setSidebarCollapsed(true);
-        if (diagramSettings.autoFitOnLayout) {
-          setFitViewOnGenerate(true);
-        }
+  const handleGenerate = useCallback(() => {
+    startGenerateTransition(async () => {
+      setParseError(null);
+      setSanitizeNotes([]);
+      setFocusedNodeId(null);
+      const { parseDiagramSql } = await import("@/lib/ddl/parse-sql-files");
+      const result = await parseDiagramSql({
+        sql: "",
+        sqlFiles,
+        existingNodes: [],
+        settings: diagramSettings,
+        dialect,
       });
-    },
-    [bumpCanvasRevision, diagramSettings, sql],
-  );
+
+      if (!result.ok) {
+        setParseError(result.error);
+        return;
+      }
+
+      setSanitizeNotes(result.sanitizeNotes);
+      setNodes(result.graph.nodes);
+      setEdges(result.graph.edges);
+      setSqlFileSelection(defaultSqlFileSelection(sqlFiles));
+      setGrouping((current) =>
+        pruneAssignments(current, result.graph.nodes.map((node) => node.id)),
+      );
+      bumpCanvasRevision();
+      setSidebarCollapsed(true);
+      if (diagramSettings.autoFitOnLayout) {
+        setFitViewOnGenerate(true);
+      }
+    });
+  }, [bumpCanvasRevision, dialect, diagramSettings, sqlFiles]);
 
   const handleApplyLayout = useCallback(async () => {
     setIsLayouting(true);
@@ -325,14 +366,6 @@ export function WorkspaceClient({ diagram }: WorkspaceClientProps) {
     }
   }, [bumpCanvasRevision, diagramSettings, edges, grouping, nodes]);
 
-  const handleSqlChange = useCallback(
-    (value: string) => {
-      setSql(value);
-      bumpCanvasRevision();
-    },
-    [bumpCanvasRevision],
-  );
-
   const handleSettingsChange = useCallback(
     (nextSettings: DiagramSettings) => {
       setDiagramSettings(nextSettings);
@@ -341,23 +374,37 @@ export function WorkspaceClient({ diagram }: WorkspaceClientProps) {
     [bumpCanvasRevision],
   );
 
+  const handleSqlFilesChange = useCallback(
+    (files: SqlFileEntry[]) => {
+      setSqlFiles(files);
+      setSqlFileSelection(defaultSqlFileSelection(files));
+      syncFromInput("", files);
+      bumpCanvasRevision();
+    },
+    [bumpCanvasRevision, syncFromInput],
+  );
+
   return (
     <div className="flex flex-col" style={{ height: APP_MAIN_HEIGHT }}>
       <div className="flex min-h-0 flex-1">
         <SqlImportPanel
-          sql={sql}
-          onSqlChange={handleSqlChange}
+          sqlFiles={sqlFiles}
+          onSqlFilesChange={handleSqlFilesChange}
           onGenerate={handleGenerate}
           isGenerating={isGenerating}
           error={parseError}
           sanitizeNotes={sanitizeNotes}
           collapsed={sidebarCollapsed}
           onToggleCollapsed={() => setSidebarCollapsed((value) => !value)}
+          dialect={dialect}
+          dialectSource={dialectSource}
+          onDialectChange={setManualDialect}
+          onResetToAuto={() => resetToAuto("", sqlFiles)}
         />
         <main className="relative min-w-0 flex-1 bg-zinc-100 dark:bg-zinc-950">
           <ErdCanvas
-            nodes={nodes}
-            edges={edges}
+            nodes={visibleNodes}
+            edges={visibleEdges}
             diagramSettings={diagramSettings}
             grouping={grouping}
             focusedNodeId={focusedNodeId}
@@ -371,6 +418,9 @@ export function WorkspaceClient({ diagram }: WorkspaceClientProps) {
             onOpenSettings={() => setSettingsOpen(true)}
             readOnly={isLocked}
             onReadOnlyChange={setIsLocked}
+            sqlFiles={sqlFiles}
+            sqlFileSelection={sqlFileSelection}
+            onSqlFileSelectionChange={setSqlFileSelection}
           />
         </main>
         <TableGroupsPanel

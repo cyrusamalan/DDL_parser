@@ -221,17 +221,19 @@ function processAlterTable(
 
   for (const item of expr) {
     if (!isObject(item)) continue;
+    if (item.action !== "add" || item.resource !== "constraint") continue;
+
+    // node-sql-parser may nest ADD CONSTRAINT FK data under create_definitions or directly on item
+    const fkDef = isObject(item.create_definitions) ? item.create_definitions : item;
 
     if (
-      item.action === "add" &&
-      item.resource === "constraint" &&
-      item.constraint_type === "FOREIGN KEY" &&
-      Array.isArray(item.definition) &&
-      isObject(item.reference_definition)
+      fkDef.constraint_type === "FOREIGN KEY" &&
+      Array.isArray(fkDef.definition) &&
+      isObject(fkDef.reference_definition)
     ) {
-      const fromColumn = columnRefName(item.definition[0]);
+      const fromColumn = columnRefName((fkDef.definition as unknown[])[0]);
       if (!fromColumn) continue;
-      processReferenceDefinition(table, fromColumn, item.reference_definition, foreignKeys);
+      processReferenceDefinition(table, fromColumn, fkDef.reference_definition, foreignKeys);
     }
   }
 }

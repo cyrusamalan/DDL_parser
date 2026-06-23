@@ -1,7 +1,7 @@
 import type { DiagramSettings } from "@/lib/types/diagram";
 
 export const DEFAULT_DIAGRAM_SETTINGS: DiagramSettings = {
-  layoutDirection: "vertical",
+  layoutDirection: "web",
   layoutEngine: "elk",
   gridSize: 5,
   spacing: "normal",
@@ -46,11 +46,13 @@ export function mergeDiagramSettings(saved?: Partial<DiagramSettings> | null): D
 
   return {
     layoutDirection:
-      saved.layoutDirection === "landscape"
-        ? "landscape"
-        : saved.layoutDirection === "web"
-          ? "web"
-          : "vertical",
+      saved.layoutDirection === "vertical"
+        ? "vertical"
+        : saved.layoutDirection === "landscape"
+          ? "landscape"
+          : saved.layoutDirection === "web"
+            ? "web"
+            : DEFAULT_DIAGRAM_SETTINGS.layoutDirection,
     layoutEngine: saved.layoutEngine === "grid" ? "grid" : "elk",
     gridSize: validGridSize,
     spacing:

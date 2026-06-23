@@ -1,5 +1,16 @@
 import type { Edge, Node, Viewport } from "@xyflow/react";
 
+export type SqlDialect = "postgresql" | "mysql" | "mariadb" | "sqlite" | "mssql" | "bigquery";
+
+/** @deprecated Use sqlFileSelection array instead. */
+export type SqlFileScope = "all" | { fileId: string };
+
+export type SqlFileEntry = {
+  id: string;
+  name: string;
+  sql: string;
+};
+
 export type TableColumn = {
   name: string;
   dataType: string;
@@ -10,6 +21,7 @@ export type TableColumn = {
 export type TableNodeData = {
   tableName: string;
   columns: TableColumn[];
+  sourceFileId?: string;
 };
 
 export type TableFlowNode = Node<TableNodeData, "tableNode">;
@@ -66,8 +78,13 @@ export type CanvasState = {
   edges: DiagramEdge[];
   viewport?: Viewport;
   sql?: string;
+  sqlFiles?: SqlFileEntry[];
+  sqlFileSelection?: string[];
+  /** @deprecated Use sqlFileSelection instead. */
+  sqlFileScope?: SqlFileScope;
   diagramSettings?: DiagramSettings;
   grouping?: DiagramGrouping;
+  dialect?: SqlDialect;
 };
 
 export type DiagramSummary = {
