@@ -4,8 +4,8 @@ import {
   isUserReferenceColumn,
   shortTableName,
   singularize,
-} from "./fk-column-naming.ts";
-import type { ParsedForeignKey, ParsedSchema, ParsedTable } from "./ast-walker.ts";
+} from "./fk-column-naming";
+import type { ParsedForeignKey, ParsedSchema, ParsedTable } from "./ast-walker";
 
 function findPrimaryKeyColumn(table: ParsedTable): string | null {
   const pk = table.columns.find((col) => col.isPrimaryKey);

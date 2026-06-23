@@ -1,5 +1,5 @@
-import { mergeSqlFiles } from "../merge-sql-files.ts";
-import type { SqlDialect, SqlFileEntry } from "../types/diagram.ts";
+import { mergeSqlFiles } from "@/lib/merge-sql-files";
+import type { SqlDialect, SqlFileEntry } from "@/lib/types/diagram";
 
 const DIALECT_DETECTION_SAMPLE_BYTES = 32_768;
 

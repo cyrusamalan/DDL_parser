@@ -1,4 +1,4 @@
-import { splitSqlStatements, type SanitizeDdlResult } from "./sanitize-postgres-ddl.ts";
+import { splitSqlStatements, type SanitizeDdlResult } from "./sanitize-postgres-ddl";
 import {
   ensureTerminator,
   isCreateTableStatement,
@@ -7,7 +7,7 @@ import {
   stripLeadingComments,
   stripParenClause,
   unqualifyDottedTableNames,
-} from "./sanitize-dialect-helpers.ts";
+} from "./sanitize-dialect-helpers";
 
 function convertTrinoTypes(sql: string): string {
   let r = sql;

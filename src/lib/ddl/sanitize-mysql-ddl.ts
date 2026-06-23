@@ -1,4 +1,4 @@
-import { splitSqlStatements, type SanitizeDdlResult } from "./sanitize-postgres-ddl.ts";
+import { splitSqlStatements, type SanitizeDdlResult } from "./sanitize-postgres-ddl";
 
 function isCreateTable(stmt: string): boolean {
   return (

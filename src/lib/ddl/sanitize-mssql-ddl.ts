@@ -1,4 +1,4 @@
-import { splitSqlStatements, type SanitizeDdlResult } from "./sanitize-postgres-ddl.ts";
+import { splitSqlStatements, type SanitizeDdlResult } from "./sanitize-postgres-ddl";
 
 function stripTableOptions(statement: string): string {
   // MSSQL table options (ON [filegroup], TEXTIMAGE_ON, etc.) follow the column list's closing ).

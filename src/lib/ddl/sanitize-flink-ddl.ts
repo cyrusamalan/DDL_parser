@@ -1,4 +1,4 @@
-import { splitSqlStatements, type SanitizeDdlResult } from "./sanitize-postgres-ddl.ts";
+import { splitSqlStatements, type SanitizeDdlResult } from "./sanitize-postgres-ddl";
 import {
   ensureTerminator,
   isAlterTableFkStatement,
@@ -6,7 +6,7 @@ import {
   stripAfterColumnList,
   stripLeadingComments,
   stripParenClause,
-} from "./sanitize-dialect-helpers.ts";
+} from "./sanitize-dialect-helpers";
 
 function convertFlinkTypes(sql: string): string {
   let r = sql;

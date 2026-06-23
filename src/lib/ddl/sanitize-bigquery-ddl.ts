@@ -1,4 +1,4 @@
-import { splitSqlStatements, type SanitizeDdlResult } from "./sanitize-postgres-ddl.ts";
+import { splitSqlStatements, type SanitizeDdlResult } from "./sanitize-postgres-ddl";
 
 // Resolve `project.dataset.table` or `table` backtick names to double-quoted identifiers.
 // BigQuery requires backticks for multi-part names; we extract just the table portion.

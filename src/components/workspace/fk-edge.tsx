@@ -19,6 +19,12 @@ import {
   HOVER_EDGE_STYLE,
 } from "@/lib/ddl/edge-styles";
 
+type FkEdgeVisualStyle = {
+  stroke: string;
+  strokeWidth: number;
+  opacity: number;
+};
+
 function FkEdgeComponent({
   id,
   source,
@@ -46,7 +52,7 @@ function FkEdgeComponent({
     borderRadius: 8,
   });
 
-  let edgeStyle = { ...DEFAULT_EDGE_STYLE };
+  let edgeStyle: FkEdgeVisualStyle = { ...DEFAULT_EDGE_STYLE };
 
   if (isCapturing) {
     edgeStyle = { ...edgeStyle, ...EXPORT_EDGE_STYLE };
@@ -64,12 +70,11 @@ function FkEdgeComponent({
       ? FOCUS_EDGE_COLOR
       : DEFAULT_EDGE_COLOR;
 
-  const resolvedMarkerEnd =
+  const resolvedMarkerEnd = (
     typeof markerEnd === "string"
       ? markerEnd
-      : markerEnd
-        ? { ...markerEnd, color: markerColor }
-        : { type: "arrowclosed" as const, color: markerColor };
+      : { type: "arrowclosed" as const, color: markerColor }
+  ) as EdgeProps["markerEnd"];
 
   return (
     <BaseEdge

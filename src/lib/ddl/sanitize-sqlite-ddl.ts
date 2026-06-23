@@ -1,4 +1,4 @@
-import { splitSqlStatements, type SanitizeDdlResult } from "./sanitize-postgres-ddl.ts";
+import { splitSqlStatements, type SanitizeDdlResult } from "./sanitize-postgres-ddl";
 
 function stripTableOptions(statement: string): string {
   // SQLite table options (WITHOUT ROWID, STRICT) follow the column list's closing ).
